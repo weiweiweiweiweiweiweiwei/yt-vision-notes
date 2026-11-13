@@ -135,6 +135,10 @@ const handlers = {
     await store.saveImageEdit(boardId, itemId, edits, blob);
     return mutated({});
   },
+  async restoreItems({ boardId, items }) { await store.restoreItems(boardId, items); return mutated({}); },
+  async trash() { return { list: await store.trash() }; },
+  async restoreFromTrash({ boardId, itemId }) { await store.restoreFromTrash(boardId, itemId); return mutated({}); },
+  async purgeTrash({ entries }) { await store.purgeTrash(entries); return mutated({}); },
   async search({ q }) { return { results: await store.search(q) }; },
   async recent() { return { ids: await store.recent() }; },
   async touchRecent({ id }) { await store.touchRecent(id); return {}; },

@@ -181,7 +181,14 @@
     itemCount: YVN.liveItems(b).length, createdAt: b.createdAt, updatedAt: b.updatedAt, deleted: !!b.deleted,
   });
 
-  YVN.itemText = (it) => [it.text, it.title, it.url, it.video && it.video.title].filter(Boolean).join(' ');
+  /** Markdown → readable plain text (for search results, trash, previews). */
+  YVN.plainText = (md) => String(md || '')
+    .replace(/\[([^\]]+)\]\{#c_[\w-]+\}/g, '$1')
+    .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/gm, '')
+    .replace(/^#{1,6}\s+/gm, '').replace(/^>\s?/gm, '')
+    .replace(/->|<-|\*\*|~~|\+\+|==|`/g, '').replace(/(^|\s)\*(\S)/g, '$1$2').replace(/(\S)\*(\s|$)/g, '$1$2');
+  YVN.itemText = (it) => [YVN.plainText(it.text), it.title, it.url, it.video && it.video.title].filter(Boolean).join(' ');
 
   function mergeItem(win, lose) {
     const a = win.image, b = lose.image;

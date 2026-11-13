@@ -17,7 +17,8 @@
   const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
   const done = (tx) => new Promise((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error('tx aborted')); });
   const strip = (v) => { const o = {}; for (const k in v) if (k[0] !== '_') o[k] = v[k]; return o; };
-  const ITEM_KEYS = ['x', 'y', 'w', 'color', 'text', 'title', 'url', 'ts', 'video', 'image', 'boardId'];
+  const ITEM_KEYS = ['x', 'y', 'w', 'color', 'text', 'title', 'url', 'ts', 'video', 'image', 'boardId', 'comments'];
+  const TRASH_MS = 30 * 24 * 3600 * 1000; // deleted cards keep their images this long (restorable from the trash)
 
   class Store {
     constructor(name) {
@@ -183,6 +184,89 @@
       });
       for (const cid of childBoards) await this._deleteBoardTree(cid);
     }
+    /** Undo / redo: put whole item snapshots back. A snapshot without `type` means "did not exist". */
+    async restoreItems(boardId, snaps) {
+      const now = Date.now();
+      const on = [], off = [];
+      await this._mutate(boardId, (b) => {
+        for (const sn of snaps) {
+          const cur = b.items.find((x) => x.id === sn.id);
+          if (!sn.type) {
+            if (cur && !cur.deleted) { cur.deleted = true; cur.updatedAt = now; if (cur.type === 'board') off.push(cur.boardId); }
+            continue;
+          }
+          const next = JSON.parse(JSON.stringify(sn));
+          next.updatedAt = now;
+          delete next.purge;
+          if (!next.deleted) delete next.moved;
+          const ki = cur && cur.image;
+          if (ki && next.image && ki.id === next.image.id) {
+            if (!next.image.fileId) next.image.fileId = ki.fileId || null;
+            if (!next.image.editedFileId && next.image.editedAt === ki.editedAt) next.image.editedFileId = ki.editedFileId || null;
+          }
+          if (cur) { for (const k of Object.keys(cur)) delete cur[k]; Object.assign(cur, next); } else b.items.push(next);
+          if (next.type === 'board') (next.deleted ? off : on).push(next.boardId);
+        }
+      });
+      for (const id of on) await this._undeleteBoardTree(id, boardId, new Set());
+      for (const id of off) await this._deleteBoardTree(id);
+    }
+    async _undeleteBoardTree(id, parentId, seen) {
+      if (seen.has(id)) return;
+      seen.add(id);
+      const b = await this.getBoard(id);
+      if (!b) return;
+      if (b.deleted || b.parentId !== parentId) await this._mutate(id, (x) => { x.deleted = false; x.parentId = parentId; x.metaUpdatedAt = Date.now(); });
+      for (const it of YVN.liveItems(b)) if (it.type === 'board' && it.boardId) await this._undeleteBoardTree(it.boardId, id, seen);
+    }
+
+    /** Deleted cards that can still be restored (newest first). */
+    async trash() {
+      const sums = await this.summaries();
+      const out = [];
+      for (const b of await this.listBoards()) {
+        for (const it of b.items) {
+          if (!it.deleted || it.moved || it.purged || it.purge || !it.type) continue;
+          if (Date.now() - (it.updatedAt || 0) > TRASH_MS) continue;
+          out.push({ boardId: b.id, boardTitle: b.id === YVN.HOME ? '首頁' : b.title, item: strip(it), boardRefTitle: it.type === 'board' ? (sums[it.boardId] || {}).title || '' : null, deletedAt: it.updatedAt });
+        }
+      }
+      return out.sort((a, c) => c.deletedAt - a.deletedAt);
+    }
+    async restoreFromTrash(boardId, itemId) {
+      const b = await this.getBoard(boardId);
+      const it = b && b.items.find((x) => x.id === itemId);
+      if (!it) return;
+      await this.restoreItems(boardId, [{ ...it, deleted: false }]);
+    }
+    /** Permanently delete (images are removed from Drive on the next sync). entries: [{boardId, itemId}] */
+    async purgeTrash(entries) {
+      const byBoard = new Map();
+      for (const e of entries) { if (!byBoard.has(e.boardId)) byBoard.set(e.boardId, []); byBoard.get(e.boardId).push(e.itemId); }
+      const childBoards = [];
+      for (const [boardId, ids] of byBoard) {
+        await this._mutate(boardId, (b) => {
+          for (const it of b.items) if (ids.includes(it.id) && it.deleted) {
+            it.purge = true; it.updatedAt = Date.now();
+            if (it.type === 'board' && it.boardId) childBoards.push(it.boardId);
+          }
+        });
+      }
+      for (const id of childBoards) await this._purgeBoardTree(id, new Set());
+    }
+    async _purgeBoardTree(id, seen) {
+      if (seen.has(id)) return;
+      seen.add(id);
+      const b = await this.getBoard(id);
+      if (!b) return;
+      const kids = b.items.filter((i) => i.type === 'board' && i.boardId).map((i) => i.boardId);
+      await this._mutate(id, (x) => {
+        x.deleted = true; x.metaUpdatedAt = Date.now();
+        for (const it of x.items) if (!it.purged) { it.deleted = true; it.purge = true; it.updatedAt = Date.now(); }
+      });
+      for (const k of kids) await this._purgeBoardTree(k, seen);
+    }
+
     async _deleteBoardTree(id) {
       const b = await this.getBoard(id);
       if (!b || b.deleted) return;
@@ -421,12 +505,15 @@
           it.removedFiles = [];
           const img = it.image;
           if (it.deleted) {
-            if (img && !it.purged && !it.moved) {
+            // moved cards: the image lives on in the target board. Trashed cards keep their image until
+            // the trash is emptied or 30 days pass, so they can still be restored.
+            if (img && it.moved) { it.purged = true; delete it.image; }
+            else if (img && !it.purged && (it.purge || Date.now() - (it.updatedAt || 0) > TRASH_MS)) {
               if (img.fileId) await drive.trash(img.fileId);
               if (img.editedFileId) await drive.trash(img.editedFileId);
               await this._delBlob(img.id);
+              it.purged = true; delete it.image;
             }
-            if (img) { it.purged = true; delete it.image; }
             continue;
           }
           if (!img) continue;

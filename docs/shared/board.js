@@ -55,6 +55,10 @@
     external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
     close: '<path d="M6 6l12 12M18 6 6 18"/>',
     dock: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M14 5v14"/>',
+    comment: '<path d="M4 5h16v11H10l-4 4v-4H4z"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+    redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   };
   const icon = (name, size) => el('span', { class: 'yb-ic', 'aria-hidden': 'true', html: `<svg viewBox="0 0 24 24" width="${size || 18}" height="${size || 18}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>` });
   const ytId = (url) => { const m = /(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/)([\w-]{11})/.exec(url || ''); return m ? m[1] : null; };
@@ -71,6 +75,22 @@
       this.view = { x: 0, y: 0, z: 1 };
       this.imgCache = new Map();
       this.gesture = null;
+      this.history = []; this.future = [];
+      // mutations go through this recording wrapper so they can be undone (Ctrl+Z)
+      const rec = (name, boardsOf) => async (...a) => {
+        const ids = boardsOf(...a).filter(Boolean);
+        const before = await this._snap(ids);
+        const r = await api[name](...a);
+        await this._pushHistory(ids, before);
+        return r;
+      };
+      this.m = {
+        putItem: rec('putItem', (b) => [b]),
+        patchItems: rec('patchItems', (b) => [b]),
+        deleteItems: rec('deleteItems', (b) => [b]),
+        createBoard: rec('createBoard', (p) => [p]),
+        moveItems: rec('moveItems', (f, t) => [f, t]),
+      };
       this._build();
       this._unsub = api.onChange && api.onChange((id) => { if (!id || id === this.boardId || this._refs(id)) this._scheduleReload(); });
     }
@@ -86,7 +106,9 @@
       this.crumbs = el('nav', { class: 'yb-crumbs', 'aria-label': 'Board 路徑' });
       this.zoomLbl = el('button', { class: 'yb-hbtn yb-zoom', title: '符合全部（Ctrl+滾輪縮放）', onclick: () => this.fit() }, '100%');
       this.head = el('header', { class: 'yb-head' }, this.crumbs, el('span', { class: 'yb-grow' }),
-        el('button', { class: 'yb-hbtn', title: '搜尋全部筆記', 'aria-label': '搜尋', onclick: () => this.toggleSearch(true) }, icon('search')),
+        this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: '復原 (Ctrl+Z)', 'aria-label': '復原', onclick: () => this.undo() }, icon('undo', 17)),
+        this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: '重做 (Ctrl+Y)', 'aria-label': '重做', onclick: () => this.redo() }, icon('redo', 17)),
+        el('button', { class: 'yb-hbtn', title: '搜尋全部筆記 (Ctrl+F)', 'aria-label': '搜尋', onclick: () => this.toggleSearch(true) }, icon('search')),
         this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: '縮小', 'aria-label': '縮小', onclick: () => this.zoomBy(1 / 1.2) }, icon('minus', 16)),
         this.zoomLbl,
         this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: '放大', 'aria-label': '放大', onclick: () => this.zoomBy(1.2) }, icon('plus', 16)),
@@ -116,13 +138,24 @@
         const main = tools.filter((t) => ['shot', 'summary', 'board'].includes(t[0]));
         const rest = tools.filter((t) => !['shot', 'summary', 'board'].includes(t[0]));
         toolbar = el('div', { class: 'yb-bar' }, main.map(btn),
-          el('button', { class: 'yb-tool', title: '更多', onclick: (e) => this._menuAt(e.currentTarget, rest.map(([act, ic, label]) => ({ label, icon: ic, run: () => this.tool(act) })), true) }, icon('more', 20), el('span', {}, '更多')));
+          el('button', { class: 'yb-tool', title: '更多', onclick: (e) => this._menuAt(e.currentTarget, [
+            ...rest.map(([act, ic, label]) => ({ label, icon: ic, run: () => this.tool(act) })),
+            { sep: true },
+            { label: '復原 (Ctrl+Z)', icon: 'undo', run: () => this.undo() },
+            { label: '重做 (Ctrl+Y)', icon: 'redo', run: () => this.redo() },
+            { label: '垃圾桶', icon: 'trash', run: () => this.openTrash() },
+          ], true) }, icon('more', 20), el('span', {}, '更多')));
         r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, this.vp), toolbar);
       } else {
-        toolbar = el('div', { class: 'yb-tools' }, tools.map(btn));
+        toolbar = el('div', { class: 'yb-tools' }, tools.map(btn),
+          el('button', { class: 'yb-tool yb-trashbtn', title: '垃圾桶：刪除的卡片保留 30 天，可還原', onclick: () => this.openTrash() }, icon('trash', 20), el('span', {}, '垃圾桶')));
         r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, toolbar, this.vp));
       }
-      r.append(this.menu, this.searchBox, this.toastEl, this.fileInput);
+      this.cpop = el('div', { class: 'yb-cpop', hidden: true, role: 'dialog' });
+      this.trashBox = el('div', { class: 'yb-search yb-trashbox', hidden: true });
+      r.append(this.menu, this.searchBox, this.trashBox, this.cpop, this.toastEl, this.fileInput);
+      this.fmt = new YVN.FormatBar(r);
+      this.cpop.addEventListener('keydown', (e) => e.stopPropagation());
       this._bind();
     }
 
@@ -308,7 +341,7 @@
         keep.add(it.id);
         let e = this.els.get(it.id);
         const s = it.type === 'board' ? this.sums[it.boardId] || {} : {};
-        const sig = [it.updatedAt, it.type === 'board' ? [s.title, s.color, s.itemCount] : '', it.image && it.image.editedAt].join('|');
+        const sig = [it.updatedAt, it.type === 'board' ? [s.title, s.color, s.itemCount] : '', it.image && it.image.editedAt, (it.comments || []).length].join('|');
         if (!e || (e._sig !== sig && this.editing !== it.id)) {
           const fresh = this._card(it);
           fresh._sig = sig;
@@ -361,6 +394,8 @@
           !vid && el('span', { class: 'yb-linkic' }, icon('link', 18)),
           el('div', { class: 'yb-linktxt' }, el('a', { href: it.url || '#', target: '_blank', rel: 'noopener noreferrer', dataset: { act: 'open' } }, it.title || it.url || '（空白連結）'), el('small', {}, host(it.url)))));
       }
+      const nc = (it.comments || []).length;
+      if (nc) c.append(el('button', { class: 'yb-cbadge', title: `${nc} 則留言`, dataset: { act: 'comments' } }, icon('comment', 13), String(nc)));
       c.append(el('button', { class: 'yb-more', title: '選單', 'aria-label': '卡片選單', dataset: { act: 'menu' } }, icon('more', 16)));
       if (it.type !== 'board') c.append(el('div', { class: 'yb-rs', title: '拖曳調整寬度' }));
       return c;
@@ -421,13 +456,21 @@
         else if (t) { e.preventDefault(); this._addNote({ text: t, edit: false }); }
       });
       this.root.addEventListener('keydown', (e) => this._key(e));
-      document.addEventListener('pointerdown', (e) => { if (!this.menu.hidden && !this.menu.contains(e.target)) this._closeMenu(); }, true);
+      document.addEventListener('pointerdown', (e) => {
+        if (!this.menu.hidden && !this.menu.contains(e.target)) this._closeMenu();
+        if (!this.cpop.hidden && !this.cpop.contains(e.target) && !(e.target.closest && e.target.closest('.yvn-cmt, .yb-cbadge'))) {
+          const cp = this._cp;
+          this._closeCpop();
+          // a new comment that was never written: drop its highlight
+          if (cp && cp.isNew && cp.anchor && cp.anchor.isConnected && this._edit && !this._edit.comments.has(cp.cid)) YVN.unwrapEl(cp.anchor);
+        }
+      }, true);
     }
 
     _down(e) {
       if (e.button !== 0 && e.button !== 1) return;
       const t = e.target;
-      if (t.closest('textarea, input, .yb-editbox')) return;
+      if (t.closest('textarea, input, .yb-editbox, .yb-rt')) return;
       if (!this.menu.hidden) this._closeMenu();
       const card = t.closest('.yb-item');
       if (this.editing && (!card || card.dataset.id !== this.editing)) this.commitEdit();
@@ -516,7 +559,7 @@
       if (gst.kind === 'marquee') { this.marquee.hidden = true; return; }
       if (gst.kind === 'resize') {
         const w = Math.round(parseFloat(gst.el.style.width));
-        await this.api.patchItems(this.boardId, [{ id: gst.id, w }]);
+        await this.m.patchItems(this.boardId, [{ id: gst.id, w }]);
         return this.reload();
       }
       if (gst.kind === 'drag') {
@@ -534,7 +577,7 @@
           return;
         }
         const patches = ids.map((id) => { const c = this.els.get(id); return { id, x: snap(parseFloat(c.style.left)), y: snap(parseFloat(c.style.top)) }; });
-        await this.api.patchItems(this.boardId, patches);
+        await this.m.patchItems(this.boardId, patches);
         return this.reload();
       }
     }
@@ -553,7 +596,7 @@
         const placed = { ...it, ...p };
         items.push(placed); after = placed;
       }
-      await this.api.moveItems(this.boardId, targetBoardId, ids, positions);
+      await this.m.moveItems(this.boardId, targetBoardId, ids, positions);
       this.sel.clear();
       this.toast(`已移到「${this._title(targetBoardId)}」`);
       return this.reload();
@@ -562,6 +605,14 @@
     _click(e) {
       const t = e.target;
       const card = t.closest('.yb-item');
+      if (card && card.classList.contains('yb-editing')) {
+        if (t.closest('a')) e.preventDefault();
+        const cm = t.closest('.yb-rt .yvn-cmt');
+        if (cm && this._edit && this._edit.ed) this._commentPop({ itemId: card.dataset.id, cid: cm.dataset.c, anchor: cm, editing: true });
+        return;
+      }
+      const cmt = t.closest('.yvn-cmt');
+      if (cmt && card) return this._commentPop({ itemId: card.dataset.id, cid: cmt.dataset.c, anchor: cmt, editing: false });
       const box = t.closest('.yb-md input[type=checkbox]');
       if (box && card) { e.preventDefault(); return this._toggleTask(card.dataset.id, +box.dataset.task); }
       const a = t.closest('a');
@@ -577,6 +628,12 @@
       switch (act.dataset.act) {
         case 'seek': return this._seek(it.video, it.ts);
         case 'video': return this._seek(it.video, 0);
+        case 'comments': {
+          const first = (it.comments || [])[0];
+          if (!first) return;
+          const span = card.querySelector(`.yvn-cmt[data-c="${first.id}"]`);
+          return this._commentPop({ itemId: it.id, cid: first.id, anchor: span || act, editing: false });
+        }
         case 'open': e.preventDefault(); return window.open(it.url, '_blank', 'noopener');
         case 'menu': {
           if (!this.sel.has(it.id)) { this.sel = new Set([it.id]); this._paintSel(); }
@@ -597,13 +654,13 @@
     async _toggleTask(id, n) {
       const it = this.board.items.find((i) => i.id === id);
       if (!it) return;
-      await this.api.putItem(this.boardId, { id, text: YVN.toggleTask(it.text, n) });
+      await this.m.putItem(this.boardId, { id, text: YVN.toggleTask(it.text, n) });
       this.reload();
     }
 
     _dbl(e) {
       const t = e.target;
-      if (t.closest('textarea, input, [data-act]')) return;
+      if (t.closest('textarea, input, [data-act], .yb-rt')) return;
       const card = t.closest('.yb-item');
       if (!card) {
         const p = this._toBoard(e.clientX, e.clientY);
@@ -621,10 +678,12 @@
 
     _key(e) {
       if (e.target.closest('textarea, input')) return;
-      if (e.key === 'Escape') { this._closeMenu(); this.toggleSearch(false); this.sel.clear(); this._paintSel(); return; }
+      if (e.key === 'Escape') { this._closeMenu(); this._closeCpop(); this.trashBox.hidden = true; this.toggleSearch(false); this.sel.clear(); this._paintSel(); return; }
       if ((e.key === 'Delete' || e.key === 'Backspace') && this.sel.size) { e.preventDefault(); this.deleteSelected(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); this.sel = new Set(YVN.liveItems(this.board).map((i) => i.id)); this._paintSel(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); this.toggleSearch(true); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); this.redo(); return; }
       if (e.key === 'Enter' && this.sel.size === 1) {
         const it = this.board.items.find((i) => i.id === [...this.sel][0]);
         if (it && it.type === 'board') this.open(it.boardId);
@@ -638,7 +697,7 @@
       if (!ids.length) return;
       const boards = ids.map((id) => this.board.items.find((i) => i.id === id)).filter((i) => i && i.type === 'board');
       if (boards.length && !confirm(`刪除 ${boards.map((b) => '「' + this._title(b.boardId) + '」').join('、')} 會一併刪除裡面所有卡片，確定嗎？`)) return;
-      await this.api.deleteItems(this.boardId, ids);
+      await this.m.deleteItems(this.boardId, ids);
       this.sel.clear();
       this.reload();
     }
@@ -682,7 +741,7 @@
         colors: [null, ...YVN.BOARD_COLORS],
         pick: async (c) => {
           if (!multi && it.type === 'board') await this.api.updateBoard(it.boardId, { color: c || '#8b8d98' });
-          else await this.api.patchItems(this.boardId, ids.map((x) => ({ id: x, color: c })));
+          else await this.m.patchItems(this.boardId, ids.map((x) => ({ id: x, color: c })));
           this.reload();
         },
       });
@@ -708,48 +767,211 @@
         inp.focus();
         return;
       }
-      const ta = el('textarea', { class: 'yb-ta', rows: '2', placeholder: it.type === 'note' ? (it.video ? '整部影片的重點、結論…' : '輸入筆記（支援 Markdown、#標籤、[[連結]]）') : '截圖說明…' });
-      ta.value = it.text || '';
-      const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
-      ta.addEventListener('input', grow);
-      ta.addEventListener('keydown', (e) => {
-        e.stopPropagation();
-        if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); this.commitEdit(); }
+      const comments = new Map((it.comments || []).map((cm) => [cm.id, { ...cm }]));
+      const ed = new YVN.RichEditor(it.text || '', {
+        placeholder: it.type === 'note' ? (it.video ? '整部影片的重點、結論…' : '輸入文字…（選取文字可設定格式）') : '截圖說明…',
+        onDone: () => this.commitEdit(),
+        onComment: (cid, span, isNew) => this._commentPop({ itemId: id, cid, anchor: span, editing: true, isNew }),
       });
-      ta.addEventListener('blur', () => setTimeout(() => { if (this.editing === id && document.activeElement !== ta) this.commitEdit(); }, 120));
-      if (it.type === 'note') c.querySelector('.yb-md').replaceWith(ta);
+      if (it.type === 'note') c.querySelector('.yb-md').replaceWith(ed.el);
       else {
-        ta.classList.add('yb-capta');
+        ed.el.classList.add('yb-capta');
         const cap = c.querySelector('.yb-cap'), ph = c.querySelector('.yb-capph'), foot = c.querySelector('.yb-foot');
         if (ph) ph.remove();
-        if (cap) cap.replaceWith(ta); else if (foot) foot.after(ta); else c.append(ta);
+        if (cap) cap.replaceWith(ed.el); else if (foot) foot.after(ed.el); else c.append(ed.el);
       }
-      this._edit = { it, get: () => ta.value, field: 'text' };
-      grow(); ta.focus();
-      ta.selectionStart = ta.selectionEnd = ta.value.length;
+      ed.el.addEventListener('blur', () => setTimeout(() => {
+        const ae = document.activeElement;
+        if (this.editing !== id || ed.el.contains(ae) || this.fmt.isBusy() || !this.cpop.hidden) return;
+        this.commitEdit();
+      }, 150));
+      this.fmt.attach(ed);
+      this._edit = { it, ed, comments, get: () => ed.getMarkdown(), field: 'text' };
+      ed.focus();
     }
 
     async commitEdit() {
       const ed = this._edit;
       const id = this.editing;
       this.editing = null; this._edit = null;
+      this.fmt.detach();
+      this._closeCpop();
       if (!ed || !id) return;
       const c = this.els.get(id);
       if (c) c.classList.remove('yb-editing');
       const val = ed.get();
       const it = ed.it;
       if (it.type === 'note' && !val.trim() && this._fresh === id) {
-        await this.api.deleteItems(this.boardId, [id]);
+        await this.m.deleteItems(this.boardId, [id]);
       } else if (it.type === 'link' && !val) {
-        if (this._fresh === id) await this.api.deleteItems(this.boardId, [id]);
-      } else if (val !== (it[ed.field] || '')) {
-        const patch = { id, [ed.field]: val };
-        if (ed.field === 'url') { patch.url = /^https?:\/\//.test(val) ? val : 'https://' + val; patch.title = await this._linkTitle(patch.url); }
-        await this.api.putItem(this.boardId, patch);
+        if (this._fresh === id) await this.m.deleteItems(this.boardId, [id]);
+      } else if (ed.field === 'url') {
+        if (val !== (it.url || '')) {
+          const url = /^https?:\/\//.test(val) ? val : 'https://' + val;
+          await this.m.putItem(this.boardId, { id, url, title: await this._linkTitle(url) });
+        }
+      } else {
+        const comments = [...ed.comments.values()].filter((cm) => cm.text && val.includes(`{#${cm.id}}`));
+        if (val !== (it.text || '') || JSON.stringify(comments) !== JSON.stringify(it.comments || [])) {
+          await this.m.putItem(this.boardId, { id, text: val, comments });
+        }
       }
       this._fresh = null;
       if (c) c._sig = null; // force re-render of this card
       await this.reload();
+    }
+
+    // ---------- comments (anchored to selected text) ----------
+    _closeCpop() { this.cpop.hidden = true; this._cp = null; }
+    _commentPop(o) {
+      const editing = !!(o.editing && this._edit && this._edit.ed);
+      const item = editing ? this._edit.it : this.board.items.find((i) => i.id === o.itemId);
+      if (!item) return;
+      const map = editing ? this._edit.comments : new Map((item.comments || []).map((cm) => [cm.id, { ...cm }]));
+      const cm = map.get(o.cid) || { id: o.cid, text: '', createdAt: Date.now() };
+      this._cp = o;
+      const quote = o.anchor && o.anchor.classList && o.anchor.classList.contains('yvn-cmt') ? o.anchor.textContent : '';
+      const close = (refocus) => { this._closeCpop(); if (editing && refocus && this._edit) this._edit.ed.focus(false); };
+      const persist = async (nextMap, text) => {
+        const patch = { id: item.id, comments: [...nextMap.values()] };
+        if (text != null) patch.text = text;
+        await this.m.putItem(this.boardId, patch);
+        this.reload();
+      };
+      const unmark = () => {
+        if (editing) { if (o.anchor && o.anchor.isConnected && o.anchor.classList.contains('yvn-cmt')) YVN.unwrapEl(o.anchor); return null; }
+        return (item.text || '').replace(new RegExp(`\\[([^\\]]+)\\]\\{#${o.cid}\\}`), '$1');
+      };
+      const showEdit = () => {
+        const ta = el('textarea', { class: 'yb-cpop-ta', rows: '3', placeholder: '輸入留言…（Ctrl+Enter 儲存）' });
+        ta.value = cm.text || '';
+        const save = async () => {
+          const v = ta.value.trim();
+          if (!v) { if (o.isNew) unmark(); close(true); return; }
+          map.set(cm.id, { ...cm, text: v, updatedAt: Date.now() });
+          close(true);
+          if (!editing) await persist(map);
+        };
+        const cancel = () => { if (o.isNew && !cm.text) unmark(); close(true); };
+        ta.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
+        });
+        this.cpop.replaceChildren(
+          ...[quote && el('blockquote', {}, quote), ta,
+            el('div', { class: 'yb-cpop-act' }, el('button', { class: 'yb-btn', onclick: cancel }, '取消'), el('button', { class: 'yb-btn yb-btn-primary', onclick: save }, '儲存'))].filter(Boolean));
+        this._placePop(o.anchor);
+        ta.focus();
+      };
+      const showRead = () => {
+        const d = new Date(cm.updatedAt || cm.createdAt || Date.now());
+        this.cpop.replaceChildren(
+          ...[quote && el('blockquote', {}, quote),
+            el('p', { class: 'yb-cpop-text' }, cm.text || '（空白留言）'),
+            el('small', {}, `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`),
+            el('div', { class: 'yb-cpop-act' },
+              el('button', { class: 'yb-btn yb-danger', onclick: async () => {
+                map.delete(cm.id);
+                const text = unmark();
+                close(true);
+                if (!editing) await persist(map, text);
+              } }, '刪除'),
+              el('button', { class: 'yb-btn', onclick: () => showEdit() }, '編輯'),
+              el('button', { class: 'yb-btn', onclick: () => close(true) }, '關閉'))].filter(Boolean));
+        this._placePop(o.anchor);
+      };
+      this.cpop.hidden = false;
+      if (o.isNew || !cm.text) showEdit(); else showRead();
+    }
+    _placePop(anchor) {
+      const rr = this.root.getBoundingClientRect();
+      const a = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : { left: rr.left + 20, bottom: rr.top + 60, top: rr.top + 60 };
+      const w = this.cpop.offsetWidth, h = this.cpop.offsetHeight;
+      const x = clamp(a.left - rr.left, 6, rr.width - w - 6);
+      let y = a.bottom - rr.top + 8;
+      if (y + h > rr.height - 6) y = Math.max(6, a.top - rr.top - h - 8);
+      this.cpop.style.left = x + 'px'; this.cpop.style.top = y + 'px';
+    }
+
+    // ---------- undo / redo (board level; text editing has the browser's own undo) ----------
+    async _snap(ids) {
+      const out = {};
+      for (const id of ids) {
+        const b = await this.api.getBoard(id);
+        out[id] = new Map(((b && b.items) || []).map((i) => [i.id, JSON.stringify(i)]));
+      }
+      return out;
+    }
+    async _pushHistory(ids, before) {
+      const after = await this._snap(ids);
+      const entry = [];
+      const norm = (j) => { if (!j) return null; const o = JSON.parse(j); delete o.updatedAt; return JSON.stringify(o); };
+      for (const id of ids) {
+        const A = before[id], B = after[id];
+        const changed = [...new Set([...A.keys(), ...B.keys()])].filter((k) => norm(A.get(k)) !== norm(B.get(k)));
+        if (!changed.length) continue;
+        entry.push({
+          boardId: id,
+          before: changed.map((k) => (A.get(k) ? JSON.parse(A.get(k)) : { id: k })),
+          after: changed.map((k) => (B.get(k) ? JSON.parse(B.get(k)) : { id: k })),
+        });
+      }
+      if (!entry.length) return;
+      this.history.push(entry);
+      if (this.history.length > 100) this.history.shift();
+      this.future = [];
+    }
+    async undo() {
+      if (this.editing) await this.commitEdit();
+      const entry = this.history.pop();
+      if (!entry) return this.toast('沒有可以復原的動作');
+      for (const e of entry) await this.api.restoreItems(e.boardId, e.before);
+      this.future.push(entry);
+      this.toast('已復原');
+      this.reload();
+    }
+    async redo() {
+      if (this.editing) await this.commitEdit();
+      const entry = this.future.pop();
+      if (!entry) return this.toast('沒有可以重做的動作');
+      for (const e of entry) await this.api.restoreItems(e.boardId, e.after);
+      this.history.push(entry);
+      this.toast('已重做');
+      this.reload();
+    }
+
+    // ---------- trash ----------
+    async openTrash() {
+      this._closeMenu();
+      const list = await this.api.trash();
+      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結' };
+      const rows = list.map((t) => {
+        const it = t.item;
+        const text = String(it.type === 'board' ? t.boardRefTitle || '' : YVN.itemText(it)).replace(/\s+/g, ' ');
+        const d = new Date(t.deletedAt);
+        return el('li', { class: 'yb-trow' },
+          el('div', {},
+            el('small', {}, `${label[it.type] || ''} · 來自「${t.boardTitle || '首頁'}」 · ${d.getMonth() + 1}/${d.getDate()}`),
+            el('span', {}, text ? (text.length > 80 ? text.slice(0, 80) + '…' : text) : '（無文字）')),
+          el('button', { class: 'yb-btn', onclick: async () => {
+            await this.api.restoreFromTrash(t.boardId, it.id);
+            this.toast('已還原到「' + (t.boardTitle || '首頁') + '」');
+            this.reload(); this.openTrash();
+          } }, '還原'),
+          el('button', { class: 'yb-btn yb-danger', onclick: async () => { await this.api.purgeTrash([{ boardId: t.boardId, itemId: it.id }]); this.openTrash(); } }, '永久刪除'));
+      });
+      this.trashBox.replaceChildren(
+        el('div', { class: 'yb-srow yb-thead' },
+          el('b', { class: 'yb-ttl' }, '垃圾桶'),
+          el('small', { class: 'yb-tnote' }, '刪除的卡片保留 30 天'),
+          list.length > 0 && el('button', { class: 'yb-btn yb-danger', onclick: async () => {
+            if (!confirm(`永久刪除垃圾桶裡的 ${list.length} 張卡片？此動作無法復原。`)) return;
+            await this.api.purgeTrash(list.map((t) => ({ boardId: t.boardId, itemId: t.item.id })));
+            this.openTrash();
+          } }, '清空'),
+          el('button', { class: 'yb-hbtn', 'aria-label': '關閉垃圾桶', onclick: () => { this.trashBox.hidden = true; } }, '✕')),
+        el('ul', { class: 'yb-sres' }, rows.length ? rows : el('li', { class: 'yb-snone' }, '垃圾桶是空的')));
+      this.trashBox.hidden = false;
     }
 
     async _linkTitle(url) {
@@ -816,7 +1038,7 @@
     async _addNote(o) {
       const w = o.w || YVN.CARD_W.note;
       const p = this._slot(w, 120, o.x != null ? { x: o.x, y: o.y } : null);
-      const it = await this.api.putItem(this.boardId, { type: 'note', text: o.text || '', video: o.video, color: o.color, w, ...p });
+      const it = await this.m.putItem(this.boardId, { type: 'note', text: o.text || '', video: o.video, color: o.color, w, ...p });
       await this.reload();
       this.focusItem(it.id, false);
       if (o.edit !== false) { this._fresh = it.id; this.startEdit(it.id); }
@@ -824,14 +1046,14 @@
     }
     async _addBoard() {
       const p = this._slot(YVN.CARD_W.board, 120);
-      const { item } = await this.api.createBoard(this.boardId, { ...p, title: '新 Board', color: YVN.BOARD_COLORS[Math.floor(Math.random() * 8)] });
+      const { item } = await this.m.createBoard(this.boardId, { ...p, title: '新 Board', color: YVN.BOARD_COLORS[Math.floor(Math.random() * 8)] });
       await this.reload();
       this.focusItem(item.id, false);
       this._renameCard(item);
     }
     async _addLink(url) {
       const p = this._slot(YVN.CARD_W.link, url ? 200 : 64);
-      const it = await this.api.putItem(this.boardId, { type: 'link', url, title: url ? await this._linkTitle(url) : '', w: YVN.CARD_W.link, ...p });
+      const it = await this.m.putItem(this.boardId, { type: 'link', url, title: url ? await this._linkTitle(url) : '', w: YVN.CARD_W.link, ...p });
       await this.reload();
       this.focusItem(it.id, false);
       if (!url) { this._fresh = it.id; this.startEdit(it.id); }
@@ -843,7 +1065,7 @@
       const w = YVN.CARD_W.shot;
       const h = Math.round(w * cap.h / cap.w) + 34;
       const p = this._slot(w, h);
-      const it = await this.api.putItem(this.boardId, {
+      const it = await this.m.putItem(this.boardId, {
         type: 'shot', ts: cap.ts, video: cap.video || null, text: '', w,
         image: { id: YVN.uid('img_'), w: cap.w, h: cap.h, edits: null, fileId: null, editedFileId: null, editedAt: null }, ...p,
       }, cap.dataURL);
@@ -876,7 +1098,7 @@
         }
         const cw = YVN.CARD_W.image;
         const p = pos || this._slot(cw, Math.round(cw * h / w));
-        const it = await this.api.putItem(this.boardId, {
+        const it = await this.m.putItem(this.boardId, {
           type: 'image', text: '', w: cw, ...p,
           image: { id: YVN.uid('img_'), w, h, edits: null, fileId: null, editedFileId: null, editedAt: null },
         }, out);

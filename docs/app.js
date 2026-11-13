@@ -111,6 +111,10 @@
       urlCache.set(key, url);
       return url;
     },
+    restoreItems: mut((b, items) => store.restoreItems(b, items)),
+    trash: () => store.trash(),
+    restoreFromTrash: mut((b, id) => store.restoreFromTrash(b, id)),
+    purgeTrash: mut((entries) => store.purgeTrash(entries)),
     search: (q) => store.search(q),
     recent: () => store.recent(),
     touchRecent: (id) => store.touchRecent(id),

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "YT Vision Notes — YouTube 截圖筆記",
   "short_name": "YT Vision Notes",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "在 YouTube 旁邊直接做白板式截圖筆記：Board 裡再開 Board、自由擺放卡片、可拉寬面板或彈出到第二螢幕，並同步到你的 Google Drive。",
   "icons": {
     "16": "icons/icon16.png",
@@ -41,6 +41,7 @@
         "shared/core.js",
         "shared/markdown.js",
         "shared/editor.js",
+        "shared/richtext.js",
         "shared/board.js",
         "remote-api.js",
         "content.js"

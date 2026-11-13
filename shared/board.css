@@ -169,3 +169,45 @@
 .yb-toast { position: absolute; z-index: 40; left: 50%; bottom: 64px; transform: translateX(-50%); max-width: 90%; padding: 8px 14px; border-radius: 8px; background: #111; color: #fff; font-size: 13px; text-align: center; }
 
 @media (prefers-reduced-motion: reduce) { .yb-item.yb-flash { animation: none; outline: 3px solid #f5a524; } }
+
+/* ---------- rich-text editing ---------- */
+.yb-rt { position: relative; outline: none; min-height: 44px; cursor: text; user-select: text; -webkit-user-select: text; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.yb-note .yb-rt { padding: 10px 12px; }
+.yb-rt.yb-capta { padding: 6px 8px 8px; font-size: 13px; min-height: 36px; }
+.yb-rt.yb-rt-empty::before { content: attr(data-placeholder); color: var(--yb-fg2); opacity: .7; pointer-events: none; position: absolute; }
+.yb-rt p { margin: 0 0 6px; }
+.yb-rt p:last-child { margin-bottom: 0; }
+.yvn-md u { text-decoration: underline; text-underline-offset: 2px; }
+.yvn-cmt { background: rgba(245, 165, 36, .28); border-bottom: 2px solid #f5a524; border-radius: 2px; cursor: pointer; }
+.yvn-cmt:hover { background: rgba(245, 165, 36, .45); }
+
+.yb-fmt { position: absolute; z-index: 35; display: flex; padding: 4px; border-radius: 8px; background: #1f2023; color: #f1f1f3; box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }
+.yb-fmt-btns, .yb-fmt-link { display: flex; align-items: center; gap: 2px; }
+.yb-fmt button { min-width: 32px; height: 32px; padding: 0 7px; border: 0; border-radius: 6px; background: none; color: inherit !important; font: 15px/1 Georgia, "Times New Roman", serif !important; display: inline-flex; align-items: center; justify-content: center; }
+.yb-fmt button:hover { background: rgba(255, 255, 255, .12); }
+.yb-fmt button.on { background: rgba(255, 255, 255, .22); color: #fff !important; }
+.yb-fmt-sep { width: 1px; height: 20px; margin: 0 4px; background: rgba(255, 255, 255, .18); }
+.yb-fmt-link input { width: 240px; height: 30px; padding: 0 8px; border: 0; border-radius: 6px; background: rgba(255, 255, 255, .1); color: #fff; outline: none; font: 13px system-ui, sans-serif; }
+.yb-fmt-link button { font: 13px system-ui, sans-serif !important; }
+
+/* comments */
+.yb-cbadge { position: absolute; left: -8px; top: -10px; display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px; border: 0; border-radius: 11px; background: #f5a524; color: #1d1d1f !important; font-size: 12px !important; font-weight: 600; box-shadow: var(--yb-shadow); }
+.yb-cpop { position: absolute; z-index: 36; width: 280px; padding: 10px; border: 1px solid var(--yb-line); border-radius: 10px; background: var(--yb-card); color: var(--yb-fg); box-shadow: 0 12px 32px rgba(0, 0, 0, .28); }
+.yb-cpop blockquote { margin: 0 0 8px; padding: 2px 8px; border-left: 3px solid #f5a524; color: var(--yb-fg2); font-size: 12px; max-height: 60px; overflow: hidden; }
+.yb-cpop-ta { width: 100%; min-height: 64px; padding: 8px; border: 1px solid var(--yb-line); border-radius: 6px; background: var(--yb-raised); color: var(--yb-fg); resize: vertical; outline: none; font: 13px/1.5 inherit; }
+.yb-cpop-ta:focus { border-color: var(--yb-accent); }
+.yb-cpop-text { margin: 0 0 4px; white-space: pre-wrap; font-size: 13px; }
+.yb-cpop small { color: var(--yb-fg2); font-size: 11px; }
+.yb-cpop-act { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.yb-btn { height: 28px; padding: 0 12px; border: 1px solid var(--yb-line); border-radius: 6px; background: var(--yb-card); color: var(--yb-fg) !important; font-size: 13px !important; white-space: nowrap; }
+.yb-btn:hover { background: var(--yb-raised); }
+.yb-btn-primary { background: var(--yb-accent); border-color: transparent; color: #fff !important; }
+.yb-btn-primary:hover { background: var(--yb-accent); filter: brightness(1.1); }
+
+/* trash */
+.yb-trashbtn { margin-top: auto; }
+.yb-thead { align-items: center; }
+.yb-ttl { font-size: 15px; }
+.yb-tnote { flex: 1; color: var(--yb-fg2); font-size: 12px; }
+.yb-trow { flex-direction: row !important; align-items: center; gap: 8px; cursor: default !important; }
+.yb-trow > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }

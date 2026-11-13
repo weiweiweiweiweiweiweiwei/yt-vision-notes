@@ -1,6 +1,7 @@
 /* YT-Vision-Notes — tiny safe Markdown renderer.
  * Supports: headings, bold/italic/strike, inline code, fenced code, lists, task lists, blockquote,
- * links, hr, #tags, [[wikilinks]] and [mm:ss] timestamps. All text is HTML-escaped first. */
+ * links, hr, #tags, [[wikilinks]] and [mm:ss] timestamps. All text is HTML-escaped first.
+ * Extensions used by the rich-text editor: ++underline++, ->centered paragraph<-, [text]{#c_id} comment marks. */
 (function (g) {
   'use strict';
   const YVN = (g.YVN = g.YVN || {});
@@ -15,12 +16,14 @@
     const codes = [];
     let s = src.replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
     s = esc(s);
+    s = s.replace(/\[([^\]]+)\]\{#(c_[\w-]+)\}/g, '<span class="yvn-cmt" data-c="$2">$1</span>');
     s = s.replace(/\[\[([^\]]+)\]\]/g, (_, t) => `<a class="yvn-wikilink" data-wikilink="${t}" href="#/search/${encodeURIComponent(t.replace(/&amp;/g, '&'))}">${t}</a>`);
     s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
     s = s.replace(/\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g, (_, t) => `<a class="yvn-ts" data-ts="${tsToSec(t)}" href="#">${t}</a>`);
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>');
     s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+    s = s.replace(/\+\+([^+]+)\+\+/g, '<u>$1</u>');
     s = s.replace(/==([^=]+)==/g, '<mark>$1</mark>');
     s = s.replace(/(^|[\s(（])#([\p{L}\p{N}_\-]+)/gu, '$1<a class="yvn-tag" data-tag="$2" href="#/tag/$2">#$2</a>');
     s = s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${esc(codes[+i])}</code>`);
@@ -33,11 +36,21 @@
     return String(md || '').replace(/^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\]/gm, (all, pre, mark) => (++k === n ? `${pre}[${mark === ' ' ? 'x' : ' '}]` : all));
   };
 
+  function centered(t) {
+    const m = /^->([\s\S]*)<-\s*$/.exec(t);
+    return m ? { text: m[1] } : null;
+  }
+
   YVN.renderMarkdown = function (md) {
     const lines = String(md || '').replace(/\r\n?/g, '\n').split('\n');
     const out = [];
     let i = 0, para = [], taskN = 0;
-    const flush = () => { if (para.length) { out.push(`<p>${para.map(inline).join('<br>')}</p>`); para = []; } };
+    const flush = () => {
+      if (!para.length) return;
+      const c = centered(para.join('\n'));
+      out.push(`<p${c ? ' style="text-align:center"' : ''}>${(c ? c.text.split('\n') : para).map(inline).join('<br>')}</p>`);
+      para = [];
+    };
     while (i < lines.length) {
       const line = lines[i];
       let m;
@@ -53,7 +66,8 @@
       if ((m = /^(#{1,6})\s+(.*)$/.exec(line))) {
         flush();
         const lv = Math.min(6, m[1].length + 2); // keep headings small inside note cards
-        out.push(`<h${lv}>${inline(m[2])}</h${lv}>`);
+        const c = centered(m[2]);
+        out.push(`<h${lv}${c ? ' style="text-align:center"' : ''}>${inline(c ? c.text : m[2])}</h${lv}>`);
         i++; continue;
       }
       if (/^\s*(---|\*\*\*)\s*$/.test(line)) { flush(); out.push('<hr>'); i++; continue; }
