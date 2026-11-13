@@ -5,7 +5,7 @@
  *   images: [{ id, ts, edits, load: async () => Blob|string(url) }],   // load() returns the ORIGINAL frame
  *   index: 0,
  *   onSave: async (image, { edits, blob }) => {},   // edits=null & blob=null → reverted to original
- *   onSeek: (ts) => {},                             // optional: timestamp chip click
+ *   onSeek: (ts, image) => {},                      // optional: timestamp chip click
  *   readOnly: false,
  * })
  *
@@ -164,7 +164,7 @@
       const t = document.createElement('button');
       t.className = 'yvne-thumb'; t.dataset.i = i;
       const badge = document.createElement('span');
-      badge.textContent = YVN.fmtTime(im.ts);
+      badge.textContent = im.ts == null ? '' : YVN.fmtTime(im.ts);
       t.appendChild(badge);
       stripEl.appendChild(t);
     });
@@ -236,6 +236,7 @@
       const saveBtn = $('[data-act=save]');
       saveBtn.disabled = !anyDirty; saveBtn.textContent = anyDirty ? '儲存修改 ●' : '儲存修改';
       $('.yvne-ts').textContent = '⏱ ' + YVN.fmtTime(images[idx].ts);
+      $('.yvne-ts').style.visibility = images[idx].ts == null ? 'hidden' : '';
       $('.yvne-count').textContent = `${idx + 1} / ${images.length}`;
       cropbar.hidden = tool !== 'crop';
       canvas.style.cursor = tool === 'pan' ? (drag ? 'grabbing' : 'grab') : tool === 'text' ? 'text' : 'crosshair';
@@ -443,7 +444,7 @@
         case 'prev': return show(idx - 1);
         case 'next': return show(idx + 1);
         case 'download': return download();
-        case 'seek': if (opts.onSeek) { opts.onSeek(images[idx].ts); close(); } return;
+        case 'seek': if (opts.onSeek) { opts.onSeek(images[idx].ts, images[idx]); close(); } return;
         case 'crop-apply': return applyCrop();
         case 'crop-reset': pendingCrop = null; if (cur().edits.crop) commit((e) => { e.crop = null; }); return setTool('pan');
       }

@@ -4,9 +4,11 @@
   'use strict';
   const YVN = (g.YVN = g.YVN || {});
 
-  YVN.SCHEMA_VERSION = 1;
+  YVN.SCHEMA_VERSION = 2;
+  YVN.HOME = 'home';
   YVN.ROOT_FOLDER = 'YT-Vision-Notes';
 
+  // v1 categories — only used to migrate old data into boards
   YVN.DEFAULT_CATEGORIES = [
     { id: 'cat_davinci', name: 'DaVinci 調色', color: '#e5484d', updatedAt: 0 },
     { id: 'cat_english', name: '英文學習', color: '#3e63dd', updatedAt: 0 },
@@ -148,5 +150,104 @@
     out.notes = [...map.values()];
     out.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0);
     return out;
+  };
+
+  // =====================================================================================
+  // v2: boards (Milanote-style whiteboards). Every board is one JSON doc on Drive.
+  //   board = { id, title, color, parentId, createdAt, updatedAt, metaUpdatedAt, deleted, items: [item] }
+  //   item  = { id, type, x, y, w, color, createdAt, updatedAt, deleted, ...type fields }
+  //     note  : text, video?            (video set → "總結筆記" for a whole video)
+  //     shot  : text (caption), ts, video, image {id,w,h,fileId,editedFileId,edits,editedAt}
+  //     image : text, image             (pasted / uploaded picture, no timestamp)
+  //     board : boardId                 (link card to a child board)
+  //     link  : url, title
+  //   video = { id, title, channel }
+  // =====================================================================================
+  YVN.BOARD_COLORS = ['#e5484d', '#f76b15', '#f5a524', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#8b8d98'];
+  YVN.CARD_W = { note: 260, shot: 240, image: 240, board: 120, link: 240 };
+
+  YVN.emptyBoard = (id, title, parentId) => {
+    const now = Date.now();
+    return {
+      schemaVersion: YVN.SCHEMA_VERSION, id, title: title || '', color: YVN.BOARD_COLORS[5],
+      parentId: parentId || null, createdAt: now, updatedAt: now, metaUpdatedAt: id === YVN.HOME ? 0 : now,
+      deleted: false, items: [],
+    };
+  };
+  YVN.liveItems = (b) => ((b && b.items) || []).filter((i) => !i.deleted);
+
+  YVN.summarizeBoard = (b) => ({
+    id: b.id, title: b.title, color: b.color, parentId: b.parentId || null,
+    itemCount: YVN.liveItems(b).length, createdAt: b.createdAt, updatedAt: b.updatedAt, deleted: !!b.deleted,
+  });
+
+  YVN.itemText = (it) => [it.text, it.title, it.url, it.video && it.video.title].filter(Boolean).join(' ');
+
+  function mergeItem(win, lose) {
+    const a = win.image, b = lose.image;
+    if (a && b && a.id === b.id) {
+      if (!a.fileId && b.fileId) a.fileId = b.fileId;
+      if (!a.editedFileId && b.editedFileId && a.editedAt === b.editedAt) a.editedFileId = b.editedFileId;
+    }
+    if (lose.removedFiles && lose.removedFiles.length) win.removedFiles = YVN.uniq([...(win.removedFiles || []), ...lose.removedFiles]);
+    return win;
+  }
+
+  /** LWW per item; board meta (title/color/parent/deleted) LWW by metaUpdatedAt. */
+  YVN.mergeBoard = (local, remote) => {
+    if (!local) return remote;
+    if (!remote) return local;
+    const out = { ...local };
+    if ((remote.metaUpdatedAt || 0) > (local.metaUpdatedAt || 0)) {
+      for (const k of ['title', 'color', 'parentId', 'deleted', 'metaUpdatedAt']) out[k] = remote[k];
+    }
+    out.createdAt = Math.min(local.createdAt || Infinity, remote.createdAt || Infinity);
+    const map = new Map();
+    for (const it of local.items || []) map.set(it.id, it);
+    for (const it of remote.items || []) {
+      const p = map.get(it.id);
+      if (!p) map.set(it.id, it);
+      else map.set(it.id, (it.updatedAt || 0) > (p.updatedAt || 0) ? mergeItem({ ...it }, p) : mergeItem({ ...p }, it));
+    }
+    out.items = [...map.values()];
+    out.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0);
+    return out;
+  };
+
+  // ---------- layout helpers (shared by the canvas UI and data-only callers) ----------
+  /** Rough card size when the DOM is not available. */
+  YVN.estimateSize = (it) => {
+    const w = it.w || YVN.CARD_W[it.type] || 240;
+    let h;
+    if (it.type === 'shot' || it.type === 'image') {
+      const im = it.image || {};
+      h = Math.round(w * ((im.h || 9) / (im.w || 16))) + (it.type === 'shot' || it.text ? 34 : 0) + (it.text ? Math.ceil(it.text.length / 18) * 20 : 0);
+    } else if (it.type === 'board') h = 120;
+    else if (it.type === 'link') h = /youtu/.test(it.url || '') ? Math.round(w * 9 / 16) + 56 : 64;
+    else h = 48 + Math.max(1, (it.text || '').split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / (w / 15))), 0)) * 22 + (it.video ? 26 : 0);
+    return { w, h };
+  };
+
+  /**
+   * Find a free spot for a w×h card: right of `after`, else below it, else first free slot scanning rows.
+   * sizeOf(item) → {w,h} (DOM measured when available). maxW limits how far right cards are placed.
+   */
+  YVN.findSlot = (items, w, h, opts) => {
+    opts = opts || {};
+    const gap = 20, sizeOf = opts.sizeOf || YVN.estimateSize;
+    const rects = items.filter((i) => !i.deleted).map((i) => ({ x: i.x, y: i.y, ...sizeOf(i) }));
+    const free = (x, y) => rects.every((r) => x + w + gap / 2 <= r.x || x >= r.x + r.w + gap / 2 || y + h + gap / 2 <= r.y || y >= r.y + r.h + gap / 2);
+    const left = opts.left != null ? opts.left : 40, top = opts.top != null ? opts.top : 40;
+    const maxW = opts.maxW || 1200;
+    const a = opts.after;
+    if (a) {
+      const s = sizeOf(a);
+      const cands = [[a.x + s.w + gap, a.y], [left, a.y + s.h + gap], [a.x, a.y + s.h + gap]];
+      for (const [x, y] of cands) if (x + w <= left + maxW && free(x, y)) return { x, y };
+    }
+    for (let y = top; y < top + 20000; y += gap) {
+      for (let x = left; x + w <= left + Math.max(maxW, w); x += gap) if (free(x, y)) return { x, y };
+    }
+    return { x: left, y: top };
   };
 })(typeof self !== 'undefined' ? self : globalThis);

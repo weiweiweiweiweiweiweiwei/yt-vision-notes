@@ -4,22 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>YT Vision Notes — 知識庫</title>
+<meta name="color-scheme" content="light dark">
+<title>YT Vision Notes</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e5484d'/%3E%3Cpath d='M14.5 7h3v7.5H25v3h-7.5V25h-3v-7.5H7v-3h7.5z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="shared/editor.css">
+<link rel="stylesheet" href="shared/board.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="top">
-  <a class="brand" href="#/" aria-label="回到首頁"><span class="logo">+</span><b>Vision Notes</b></a>
-  <form class="search" id="searchForm" role="search">
-    <input id="q" type="search" placeholder="搜尋影片標題、筆記內容、#標籤…" aria-label="全文搜尋" autocomplete="off">
-  </form>
-  <button class="btn ghost" id="syncBtn" title="與 Google Drive 同步"><span class="dot" id="syncDot"></span><span id="syncText">未登入</span></button>
-  <button class="btn ghost icon" id="settingsBtn" title="分類與設定" aria-label="分類與設定">⚙</button>
-</header>
+<main id="board"></main>
 
-<main id="app" tabindex="-1"></main>
+<aside id="mini" hidden>
+  <header><span id="miniTitle"></span><a id="miniOpen" target="_blank" rel="noopener" title="在 YouTube 開啟">↗</a><button id="miniClose" aria-label="關閉播放器">✕</button></header>
+  <iframe id="miniFrame" title="YouTube 播放器" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+</aside>
 
 <dialog id="dlg"></dialog>
 <div id="toast" role="status" hidden></div>
@@ -31,6 +29,7 @@
 <script src="shared/store.js"></script>
 <script src="shared/zip.js"></script>
 <script src="shared/editor.js"></script>
+<script src="shared/board.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="app.js"></script>
 </body>

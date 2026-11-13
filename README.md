@@ -1,11 +1,11 @@
 # YT-Vision-Notes
 
-YouTube 沉浸式截圖筆記：**Chrome 擴充功能**（在 YouTube 右側欄直接做多圖截圖筆記）＋ **GitHub Pages 知識庫網站**（像觀看紀錄一樣回顧），資料存在**你自己的 Google Drive**。
+YouTube 沉浸式截圖筆記：**Chrome 擴充功能**（在 YouTube 旁邊直接用白板做截圖筆記）＋ **GitHub Pages 知識庫網站**（像觀看紀錄一樣回顧），資料存在**你自己的 Google Drive**。
 
 沒有建置步驟、沒有第三方套件、沒有伺服器 —— 全部是原生 JavaScript。
 
 ```
-/shared      共用原始碼（唯一來源）：schema、Markdown、Drive API、IndexedDB 同步、ZIP、Lightbox/畫布編輯器
+/shared      共用原始碼（唯一來源）：schema、白板引擎、Markdown、Drive API、IndexedDB 同步、ZIP、Lightbox/畫布編輯器
 /extension   Chrome Extension (Manifest V3)   ← 「載入未封裝項目」選這個資料夾
 /docs        GitHub Pages 網站 (SPA)           ← Pages 設定選 main 分支的 /docs
 /scripts     build.mjs：把 /shared 複製到 extension/shared 與 docs/shared，並產生圖示
@@ -17,26 +17,31 @@ YouTube 沉浸式截圖筆記：**Chrome 擴充功能**（在 YouTube 右側欄�
 
 ## 功能總覽
 
-**擴充功能（YouTube 頁面內）**
-- 播放器控制列常駐按鈕，開啟後右側推薦欄換成筆記工作區（跟隨 YouTube 深/淺色主題）。
-- **`[+]` 擷取畫面**：用 `<canvas>` 直接抓 `video.html5-main-video` 的畫面幀 → WebP，不含暫停遮罩、進度條、控制列。快捷鍵 `Alt+S`。
-- **同主題多張連拍**：多次 `[+]` 都進同一則草稿的圖片列，可拖曳排序、單張刪除，每張有自己的時間戳。
-- 沒截圖就按儲存時，會**自動擷取當下畫面**。
-- Markdown 筆記、`#標籤`（含自動補全）、`[[雙向連結]]`、`❝ CC 字幕` 一鍵引用、`⏱` 插入時間戳。
-- 影片主分類（可新增/改名/改色/刪除）。本片筆記清單可點時間戳跳轉、編輯、刪除。
+像 Milanote 一樣的白板筆記：**Board 裡可以再開 Board**，卡片自由擺放。YouTube 側邊面板、彈出視窗、知識庫網站用的是同一套白板，資料互通。
 
-**Lightbox / 畫布編輯器（兩端共用）**
-- 滾輪縮放、拖曳平移、`← →` 切換同則筆記的連續截圖。
-- 裁切、畫筆、螢光筆、箭頭、矩形、圓形、文字（雙擊圖片即可輸入）。
-- Undo / Redo / Clear All（還原原始底圖）。原始截圖永遠保留，標註以圖層資料另存，可隨時再編輯。
-- 快捷鍵：`V` 平移、`P` 畫筆、`H` 螢光筆、`A` 箭頭、`R` 矩形、`E` 圓形、`T` 文字、`C` 裁切、`Ctrl+Z / Ctrl+Y`、`Ctrl+S` 儲存、`0` 符合視窗、`Esc` 關閉。
+**在 YouTube 上（擴充功能）**
+- 播放器控制列的筆記按鈕：右側推薦欄換成白板。**每次打開都從「首頁」開始**，自己選要新增 Board 還是進入舊的 Board（首頁上方有「最近使用」）。
+- **`截圖`（或 `Alt+S`）**：用 `<canvas>` 抓 `video.html5-main-video` 的原始畫面（不含控制列、進度條），**直接在目前的 Board 新增一張截圖卡**，自動排在上一張旁邊；卡片記住時間戳和影片，點時間戳跳回那一秒。
+- **`總結`**：針對整部影片的總結筆記（不含截圖），卡片上會標示影片，點一下回到影片。
+- **可拖曳的分隔線**：播放器和筆記之間拖曳調整比例；雙擊分隔線在 1/3、1/2、2/3 之間切換；比例會記住。
+- **彈出成獨立視窗**：面板右上角 ⧉，筆記變成獨立視窗，可拖到第二台螢幕。視窗裡按「截圖」一樣擷取 YouTube 分頁的畫面、點時間戳一樣讓 YouTube 跳轉；按「收回」回到右側。
+
+**白板操作（三處相同）**
+- 卡片種類：筆記（Markdown、`#標籤`、`[[連結]]`、`[mm:ss]`）、截圖、圖片、Board、待辦（可直接勾選）、連結（YouTube 連結會顯示縮圖）。
+- 拖曳空白處或滾輪移動畫布，`Ctrl + 滾輪` 縮放；雙擊空白處新增筆記；雙擊卡片編輯；拖右下角改寬度。
+- **把卡片拖到 Board 卡上 → 移進那個 Board**；右鍵或 `⋯` 選單也能「移到 Board…／移到上一層」、改顏色、刪除。
+- `Shift + 拖曳` 框選多張、`Delete` 刪除、`Ctrl + F` 搜尋所有 Board、可直接貼上或拖入圖片與網址。
+- 麵包屑顯示目前位置（首頁 › DaVinci 調色 › 節點技巧），雙擊目前的名稱可改名。
+
+**Lightbox / 畫布編輯器**（雙擊截圖開啟）
+- 滾輪縮放、拖曳平移、`← →` 切換同一個 Board 的截圖。
+- 裁切、畫筆、螢光筆、箭頭、矩形、圓形、文字；Undo / Redo / Clear All。原始截圖永遠保留，標註可隨時再編輯。
 
 **知識庫網站**
-- 觀看紀錄風格首頁：分類 Tabs、熱門標籤膠囊、全文搜尋（`/` 聚焦搜尋框）。
-- 點標籤 → 跨影片知識卡片牆。
-- 單片複習頁：內嵌 YouTube 播放器＋時間軸筆記，點時間戳立即跳轉播放。
-- 反向連結、補充文字筆記、編輯/刪除、匯出 `.md + 圖片` ZIP。
-- 支援電腦、平板、手機。
+- 全螢幕白板，左側工具列；點時間戳會在右下角開小播放器。
+- 匯出目前 Board 為 `.md + 圖片` ZIP。
+
+> 從 0.1 版升級：重新載入擴充功能後，舊的「影片 → 筆記」會自動依分類轉成 Board（例如「DaVinci 調色」），每部影片的筆記變成卡片；Drive 上舊的 `videos/` 檔案原樣保留當備份。
 
 ---
 
@@ -86,75 +91,45 @@ GitHub repo → **Settings → Pages** → Source 選 **Deploy from a branch**�
 
 ---
 
-## 資料 Schema
+## 資料 Schema（v2）
 
-Google Drive 結構（都在你雲端硬碟的 `YT-Vision-Notes/` 內，可直接用 Drive 檢視）：
+Google Drive 結構（都在你雲端硬碟的 `YT-Vision-Notes/` 內）：
 
 ```
 YT-Vision-Notes/
-├── index.json                    分類、標籤索引、每部影片摘要
-├── videos/{videoId}.json         該影片所有筆記、時間戳、標註圖層、圖片 fileId
-└── images/{videoId}/
-    ├── {imageId}.webp            原始截圖（不會被覆寫）
-    └── {imageId}.edit.webp       套用裁切/標註後的成品
+├── index.json                    每個 Board 的摘要（標題、顏色、上層、卡片數、updatedAt）
+├── boards/{boardId}.json         一個 Board 的所有卡片（首頁的 id 是 home）
+├── images/{imageId}.webp         原始截圖（不會被覆寫）
+├── images/{imageId}.edit.webp    套用裁切/標註後的成品
+└── videos/ , images/{videoId}/   0.1 版的舊資料（只讀、當備份）
 ```
 
-### `index.json`
+### `boards/{boardId}.json`
 ```jsonc
 {
-  "schemaVersion": 1,
-  "updatedAt": 1794542400000,
-  "categories": [
-    { "id": "cat_davinci", "name": "DaVinci 調色", "color": "#e5484d", "updatedAt": 0, "deleted": false }
-  ],
-  "tags": { "膚色校正": 3, "CST": 1 },            // 標籤 → 筆記則數
-  "videos": {
-    "dQw4w9WgXcQ": {
-      "videoId": "dQw4w9WgXcQ", "title": "…", "channel": "…", "categoryId": "cat_davinci",
-      "noteCount": 4, "imageCount": 11, "tags": ["節點串聯", "膚色校正"],
-      "createdAt": 0, "updatedAt": 0, "deleted": false
-    }
-  }
-}
-```
-
-### `videos/{videoId}.json`
-```jsonc
-{
-  "schemaVersion": 1,
-  "videoId": "dQw4w9WgXcQ", "title": "…", "channel": "…",
-  "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "duration": 1234,
-  "categoryId": "cat_davinci", "metaUpdatedAt": 0,
-  "createdAt": 0, "updatedAt": 0, "deleted": false,
-  "notes": [
-    {
-      "id": "n_xxx", "ts": 312,                    // 秒
-      "text": "Markdown…", "tags": ["節點串聯"],
-      "createdAt": 0, "updatedAt": 0, "deleted": false,
-      "images": [                                  // 順序 = 連拍步驟順序
-        {
-          "id": "img_xxx", "ts": 312, "w": 1920, "h": 1080,
-          "fileId": "<Drive id：原圖>", "editedFileId": "<Drive id：編輯後>", "editedAt": 0,
-          "edits": {                               // null = 未編輯；座標皆為原圖像素
-            "crop": { "x": 0, "y": 0, "w": 800, "h": 450 },
-            "shapes": [
-              { "type": "arrow", "color": "#ff3b30", "size": 9, "x1": 0, "y1": 0, "x2": 10, "y2": 10 },
-              { "type": "pen",   "color": "#ff3b30", "size": 9, "pts": [[0, 0], [5, 5]] },
-              { "type": "text",  "color": "#ffd60a", "size": 9, "x": 0, "y": 0, "text": "重點" }
-            ]                                      // type: pen | hl | arrow | rect | ellipse | text
-          }
-        }
-      ]
-    }
+  "schemaVersion": 2,
+  "id": "b_xxx", "title": "節點技巧", "color": "#3e63dd", "parentId": "home",
+  "createdAt": 0, "updatedAt": 0, "metaUpdatedAt": 0, "deleted": false,
+  "items": [
+    { "id": "i_1", "type": "board", "boardId": "b_child", "x": 40, "y": 40, "w": 120 },
+    { "id": "i_2", "type": "note", "text": "Markdown…", "video": { "id": "dQw4w9WgXcQ", "title": "…" },  // video = 總結筆記
+      "x": 200, "y": 40, "w": 260, "color": "#f5a524" },
+    { "id": "i_3", "type": "shot", "ts": 312, "text": "說明", "video": { "id": "…", "title": "…" },
+      "x": 480, "y": 40, "w": 240,
+      "image": { "id": "img_x", "w": 1920, "h": 1080, "fileId": "…", "editedFileId": "…", "editedAt": 0,
+                 "edits": { "crop": { "x": 0, "y": 0, "w": 800, "h": 450 }, "shapes": [ … ] } } },
+    { "id": "i_4", "type": "image", "image": { … } },
+    { "id": "i_5", "type": "link", "url": "https://…", "title": "…" }
+    // 每張卡片都有 createdAt / updatedAt / deleted
   ]
 }
 ```
 
 ### 同步方式（Delta Sync）
-- 兩端各有自己的 IndexedDB（`videos`、`blobs`、`kv`），畫面永遠先讀本機 → 秒開、可離線。
-- 同步時：讀 `index.json` → 只下載 `updatedAt` 與上次同步不同的影片 JSON → 以「筆記為單位、最後修改者勝」合併（刪除用墓碑標記）→ 只上傳有變動的影片與尚未上傳的圖片 → 更新 `index.json`。
+- 兩端各有自己的 IndexedDB，畫面永遠先讀本機 → 秒開、可離線。
+- 同步時：讀 `index.json` → 只下載 `updatedAt` 改變的 Board → 以「卡片為單位、最後修改者勝」合併（刪除用墓碑標記）→ 只上傳有變動的 Board 與新圖片 → 更新 `index.json`。
 - 圖片在要顯示時才從 Drive 下載並快取。
-- 擴充功能：每次儲存後立即同步，另外每 30 分鐘背景同步一次。網站：開啟時、修改後、切回分頁時同步。
+- 擴充功能：修改後約 4 秒同步一次，另外每 30 分鐘背景同步。網站：開啟時、修改後、切回分頁時同步。
 
 ---
 
@@ -162,5 +137,6 @@ YT-Vision-Notes/
 - **受 DRM 保護的影片**（部分電影、YouTube Premium 內容）瀏覽器不允許讀取畫面，會提示無法擷取。
 - 網站的 Google 登入權杖有效約 1 小時，過期後按一下右上角「重新連線」即可（Google 對純前端網站的限制）；擴充功能端不受影響。
 - 擴充功能使用 `chrome.identity`，需在 Google Chrome 使用（Edge/Brave 的行為不同）。
-- 同一則筆記在兩台裝置上「同時」被修改時，較晚儲存的版本會勝出。
-- YouTube 改版若更動 `.ytp-right-controls`、`#secondary` 等節點，需調整 `extension/content.js` 的選擇器。
+- 同一張卡片在兩台裝置上「同時」被修改時（例如一邊移動、一邊改文字），較晚的那次修改整張卡片勝出。
+- 白板目前還沒有：卡片之間的連線、欄（Column）、白板層級的復原/重做（圖片編輯器內有）。
+- YouTube 改版若更動 `.ytp-right-controls`、`#columns`、`#secondary` 或 `--ytd-watch-flexy-sidebar-width` 等，需調整 `extension/content.js` / `content.css`。

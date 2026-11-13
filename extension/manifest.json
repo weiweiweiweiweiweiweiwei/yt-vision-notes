@@ -2,22 +2,54 @@
   "manifest_version": 3,
   "name": "YT Vision Notes — YouTube 截圖筆記",
   "short_name": "YT Vision Notes",
-  "version": "0.1.0",
-  "description": "在 YouTube 右側欄直接做截圖筆記：多圖連拍、裁切標註、分類與 #標籤，並同步到你的 Google Drive。",
-  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
-  "permissions": ["identity", "storage", "unlimitedStorage", "alarms"],
-  "host_permissions": ["https://www.googleapis.com/*"],
+  "version": "0.2.0",
+  "description": "在 YouTube 旁邊直接做白板式截圖筆記：Board 裡再開 Board、自由擺放卡片、可拉寬面板或彈出到第二螢幕，並同步到你的 Google Drive。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "identity",
+    "storage",
+    "unlimitedStorage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://www.googleapis.com/*",
+    "https://www.youtube.com/*"
+  ],
   "oauth2": {
     "client_id": "1076400748035-5t6h8qv1sm21vp79o8tdii3uinemj383.apps.googleusercontent.com",
-    "scopes": ["https://www.googleapis.com/auth/drive.file"]
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.file"
+    ]
   },
-  "background": { "service_worker": "background.js" },
-  "action": { "default_title": "YT Vision Notes", "default_popup": "popup.html" },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "YT Vision Notes",
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/*"],
-      "js": ["shared/core.js", "shared/markdown.js", "shared/editor.js", "content.js"],
-      "css": ["shared/editor.css", "content.css"],
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "shared/core.js",
+        "shared/markdown.js",
+        "shared/editor.js",
+        "shared/board.js",
+        "remote-api.js",
+        "content.js"
+      ],
+      "css": [
+        "shared/editor.css",
+        "shared/board.css",
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
   ]

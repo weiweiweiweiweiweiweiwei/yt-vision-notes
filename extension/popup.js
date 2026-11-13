@@ -7,7 +7,7 @@ function fmt(ms) { return ms ? new Date(ms).toLocaleString('zh-TW', { hour12: fa
 function render(r) {
   if (r && r.status) status = r.status;
   $('state').textContent = status.syncing ? '同步中…' : status.signedIn ? `已連線 Google Drive · 上次同步 ${fmt(status.lastSync)}` : '尚未登入 Google（筆記目前只存在本機）';
-  if (r && r.videoCount != null) $('counts').textContent = `本機共有 ${r.videoCount} 部影片、${r.noteCount} 則筆記`;
+  if (r && r.boardCount != null) $('counts').textContent = `本機共有 ${r.boardCount} 個 Board、${r.itemCount} 張卡片`;
   $('auth').textContent = status.signedIn ? '登出' : '登入 Google';
   $('auth').classList.toggle('primary', !status.signedIn);
   $('sync').disabled = !status.signedIn || status.syncing;

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<title>YT Vision Notes</title>
+<link rel="icon" href="icons/icon48.png">
+<link rel="stylesheet" href="shared/editor.css">
+<link rel="stylesheet" href="shared/board.css">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #f3f3f1; }
+  @media (prefers-color-scheme: dark) { body { background: #1b1c1f; } }
+  #board { position: fixed; inset: 0; }
+  .win-sync i { width: 9px; height: 9px; border-radius: 50%; background: #8b8d98; display: block; }
+  .win-sync.ok i { background: #30a46c; } .win-sync.err i { background: #e5484d; } .win-sync.busy i { background: #f5a524; }
+</style>
+</head>
+<body>
+<main id="board"></main>
+<script src="shared/core.js"></script>
+<script src="shared/markdown.js"></script>
+<script src="shared/editor.js"></script>
+<script src="shared/board.js"></script>
+<script src="remote-api.js"></script>
+<script src="window.js"></script>
+</body>
+</html>

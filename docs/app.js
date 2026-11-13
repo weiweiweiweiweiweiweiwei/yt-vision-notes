@@ -1,15 +1,14 @@
-/* YT-Vision-Notes — GitHub Pages knowledge base (vanilla SPA, hash routing, no build step). */
+/* YT-Vision-Notes — GitHub Pages knowledge base: Milanote-style boards on top of the shared board engine. */
 (() => {
   'use strict';
   const YVN = window.YVN;
-  const esc = YVN.escapeHtml;
   const $ = (sel, root) => (root || document).querySelector(sel);
-  const app = $('#app');
+  const el = YVN.el;
   const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  const strip = (v) => { if (!v) return null; const o = {}; for (const k in v) if (k[0] !== '_') o[k] = v[k]; return o; };
 
   const store = new YVN.Store('yvn-web');
-  const D = { videos: [], categories: [], tags: {} };      // in-memory snapshot of the local store
-  const V = { cat: sessionStorage.getItem('yvnCat') || 'all', syncing: false, error: '', videoShell: null, editing: null };
+  const S = { syncing: false, error: '' };
 
   // ---------- auth (Google Identity Services token flow) ----------
   const clientId = () => localStorage.getItem('yvnClientId') || (window.YVN_CONFIG && window.YVN_CONFIG.clientId) || '';
@@ -53,422 +52,186 @@
   });
   const driveOrNull = () => (tokenValid() ? drive : null);
 
-  // ---------- sync ----------
-  function renderSync() {
-    const dot = $('#syncDot'), txt = $('#syncText');
-    dot.className = 'dot ' + (V.syncing ? 'busy' : V.error ? 'err' : tokenValid() ? 'ok' : '');
-    txt.textContent = V.syncing ? '同步中…' : V.error ? '同步失敗' : tokenValid() ? '已同步' : localStorage.getItem('yvnSignedIn') ? '重新連線' : '登入 Google';
-    $('#syncBtn').title = V.error || '與 Google Drive 同步';
-  }
-  async function sync(interactive) {
-    if (V.syncing) return;
-    if (!tokenValid()) {
-      if (!interactive) return renderSync();
-      try { await requestToken(localStorage.getItem('yvnSignedIn') ? '' : 'consent'); localStorage.setItem('yvnSignedIn', '1'); }
-      catch (e) { V.error = e.message; renderSync(); toast(e.message); if (!clientId()) openSettings(); return; }
-    }
-    V.syncing = true; V.error = ''; renderSync();
-    try {
-      await store.sync(drive);
-      await reload();
-      softRender();
-    } catch (e) {
-      console.error(e); V.error = e.message || String(e);
-      if (interactive) toast('同步失敗：' + V.error);
-    }
-    V.syncing = false; renderSync();
-  }
-  let syncTimer;
-  const scheduleSync = () => { clearTimeout(syncTimer); syncTimer = setTimeout(() => sync(false), 1500); };
-
-  async function reload() {
-    D.videos = await store.listVideos();
-    D.categories = await store.getCategories();
-    D.tags = await store.allTags();
-  }
-  const catOf = (id) => D.categories.find((c) => c.id === id) || null;
-  const videoOf = (id) => D.videos.find((v) => v.videoId === id) || null;
-
-  // ---------- utils ----------
+  // ---------- toast ----------
   let toastTimer;
   function toast(msg) {
     const t = $('#toast'); t.textContent = msg; t.hidden = false;
     clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
   }
-  function dayLabel(ms) {
-    const d = new Date(ms), now = new Date();
-    const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-    const diff = Math.round((day(now) - day(d)) / 86400000);
-    if (diff === 0) return '今天';
-    if (diff === 1) return '昨天';
-    if (diff < 7) return ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][d.getDay()];
-    return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`;
-  }
-  const badge = (catId) => { const c = catOf(catId); return c ? `<span class="badge" style="background:${esc(c.color)}">${esc(c.name)}</span>` : ''; };
-  const tagLink = (t, on) => `<a class="tag${on ? ' on' : ''}" href="#/tag/${encodeURIComponent(t)}">#${esc(t)}</a>`;
 
-  // lazy images from IndexedDB / Drive
+  // ---------- sync ----------
+  const syncBtn = el('button', { class: 'yb-hbtn app-sync', title: '與 Google Drive 同步', onclick: () => sync(true) }, el('i', { class: 'dot' }), el('span', {}, '登入'));
+  function renderSync() {
+    syncBtn.querySelector('.dot').className = 'dot ' + (S.syncing ? 'busy' : S.error ? 'err' : tokenValid() ? 'ok' : '');
+    syncBtn.querySelector('span').textContent = S.syncing ? '同步中…' : S.error ? '同步失敗' : tokenValid() ? '已同步' : localStorage.getItem('yvnSignedIn') ? '重新連線' : '登入 Google';
+    syncBtn.title = S.error || '與 Google Drive 同步';
+  }
+  async function sync(interactive) {
+    if (S.syncing) return;
+    if (!tokenValid()) {
+      if (!interactive) return renderSync();
+      try { await requestToken(localStorage.getItem('yvnSignedIn') ? '' : 'consent'); localStorage.setItem('yvnSignedIn', '1'); }
+      catch (e) { S.error = e.message; renderSync(); toast(e.message); if (!clientId()) openSettings(); return; }
+    }
+    S.syncing = true; S.error = ''; renderSync();
+    try {
+      await store.sync(drive);
+      view.reload();
+    } catch (e) {
+      console.error(e); S.error = e.message || String(e);
+      if (interactive) toast('同步失敗：' + S.error);
+    }
+    S.syncing = false; renderSync();
+  }
+  let syncTimer;
+  const scheduleSync = () => { clearTimeout(syncTimer); syncTimer = setTimeout(() => sync(false), 2500); };
+
+  // ---------- board API over the local store ----------
   const urlCache = new Map();
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) if (e.isIntersecting) { io.unobserve(e.target); loadImg(e.target); }
-  }, { rootMargin: '300px' });
-  async function loadImg(imgEl) {
-    const [videoId, noteId, imageId] = imgEl.dataset.img.split('|');
-    const v = videoOf(videoId), n = v && v.notes.find((x) => x.id === noteId), img = n && n.images.find((i) => i.id === imageId);
-    if (!img) return;
-    const key = `${img.id}:${img.editedAt || 0}`;
-    if (!urlCache.has(key)) {
-      urlCache.set(key, store.getImageBlob(videoId, img, undefined, driveOrNull()).then((b) => (b ? URL.createObjectURL(b) : null)).catch(() => null));
-    }
-    const url = await urlCache.get(key);
-    if (url) imgEl.src = url; else { urlCache.delete(key); imgEl.alt = '圖片尚未下載（請登入同步）'; }
-  }
-  const observeImages = () => app.querySelectorAll('img[data-img]:not([src])').forEach((i) => io.observe(i));
+  const mut = (fn) => async (...a) => { const r = await fn(...a); scheduleSync(); return r; };
+  const api = {
+    getBoard: async (id) => strip(await store.getBoard(id)),
+    summaries: () => store.summaries(),
+    createBoard: mut((p, o) => store.createBoard(p, o)),
+    updateBoard: mut((id, patch) => store.updateBoard(id, patch).then(strip)),
+    putItem: mut(async (b, it, dataURL) => store.putItem(b, it, dataURL ? { orig: await YVN.dataURLToBlob(dataURL) } : null)),
+    patchItems: mut((b, p) => store.patchItems(b, p).then(() => true)),
+    deleteItems: mut((b, ids) => store.deleteItems(b, ids)),
+    moveItems: mut((f, t, ids, pos) => store.moveItems(f, t, ids, pos)),
+    saveImageEdit: mut((b, id, edits, blob) => store.saveImageEdit(b, id, edits, blob).then(() => true)),
+    async getImage(boardId, it, which) {
+      const img = it.image;
+      if (!img) return null;
+      const w = which || (img.edits ? 'edit' : 'orig');
+      const key = `${img.id}:${w}:${img.editedAt || 0}`;
+      if (urlCache.has(key)) return urlCache.get(key);
+      const blob = await store.getImageBlob(img, w, driveOrNull());
+      if (!blob) return null;
+      const url = URL.createObjectURL(blob);
+      urlCache.set(key, url);
+      return url;
+    },
+    search: (q) => store.search(q),
+    recent: () => store.recent(),
+    touchRecent: (id) => store.touchRecent(id),
+    onChange: (fn) => store.onChange((w) => fn(w.startsWith('board:') ? w.slice(6) : null)),
+  };
 
-  // ---------- shared fragments ----------
-  function noteHTML(v, n, opts) {
-    opts = opts || {};
-    const imgs = n.images || [];
-    const strip = imgs.length ? `<div class="strip${imgs.length === 1 ? ' single' : ''}">${imgs.map((img, i) => `
-        <button class="shot" data-act="open" data-v="${v.videoId}" data-n="${n.id}" data-i="${i}" aria-label="放大截圖 ${i + 1}">
-          <img data-img="${v.videoId}|${n.id}|${img.id}" alt="截圖 ${YVN.fmtTime(img.ts)}" loading="lazy">
-          ${imgs.length > 1 ? `<span class="n">${i + 1}</span>` : ''}
-          <span class="t" data-act="seek" data-v="${v.videoId}" data-ts="${img.ts}">${YVN.fmtTime(img.ts)}</span>
-        </button>`).join('')}</div>` : '';
-    if (V.editing === n.id) {
-      return `<article class="note" data-note="${n.id}">
-        <header><button class="ts" data-act="seek" data-v="${v.videoId}" data-ts="${n.ts}">${YVN.fmtTime(n.ts)}</button><span class="src">編輯中</span></header>
-        ${strip}
-        <div class="note-edit">
-          <textarea class="ta" id="editText" aria-label="筆記內容">${esc(n.text)}</textarea>
-          <input class="inp" id="editTags" value="${esc((n.tags || []).map((t) => '#' + t).join(' '))}" placeholder="#標籤 以空白分隔" list="taglist" aria-label="標籤">
-          <div class="actions"><button class="btn sm" data-act="edit-cancel">取消</button><button class="btn sm primary" data-act="edit-save" data-v="${v.videoId}" data-n="${n.id}">儲存</button></div>
-        </div></article>`;
-    }
-    return `<article class="note" data-note="${n.id}">
-      <header>
-        <a class="ts" data-act="seek" data-v="${v.videoId}" data-ts="${n.ts}" href="#/video/${v.videoId}/${n.ts}">${YVN.fmtTime(n.ts)}</a>
-        ${opts.wall ? `<a class="src" href="#/video/${v.videoId}/${n.ts}" title="${esc(v.title)}">${esc(v.title || v.videoId)}</a>${badge(v.categoryId)}` : `<span class="src">${YVN.fmtDate(n.updatedAt)}</span>
-          <button class="iconbtn" data-act="edit" data-n="${n.id}" title="編輯" aria-label="編輯筆記">✎</button>
-          <button class="iconbtn" data-act="del-note" data-v="${v.videoId}" data-n="${n.id}" title="刪除" aria-label="刪除筆記">🗑</button>`}
-      </header>
-      ${strip}
-      ${n.text ? `<div class="md" data-v="${v.videoId}">${YVN.renderMarkdown(n.text)}</div>` : ''}
-      ${n.tags && n.tags.length ? `<div class="tagrow">${n.tags.map((t) => tagLink(t, t === opts.activeTag)).join('')}</div>` : ''}
-    </article>`;
+  // ---------- mini YouTube player for timestamps ----------
+  const mini = $('#mini');
+  function seek(video, ts) {
+    if (!video) return toast('這張卡片沒有對應的影片');
+    $('#miniTitle').textContent = video.title || video.id;
+    $('#miniOpen').href = `https://www.youtube.com/watch?v=${video.id}&t=${Math.floor(ts)}s`;
+    $('#miniFrame').src = `https://www.youtube-nocookie.com/embed/${video.id}?autoplay=1&start=${Math.floor(ts)}&rel=0`;
+    mini.hidden = false;
   }
+  $('#miniClose').onclick = () => { mini.hidden = true; $('#miniFrame').src = 'about:blank'; };
 
-  function filterBar(route) {
-    const counts = { all: D.videos.length, none: D.videos.filter((v) => !catOf(v.categoryId)).length };
-    for (const v of D.videos) if (catOf(v.categoryId)) counts[v.categoryId] = (counts[v.categoryId] || 0) + 1;
-    const tab = (id, label, color) => `<button class="tab${V.cat === id ? ' on' : ''}" data-act="cat" data-cat="${id}">${color ? `<i style="background:${esc(color)}"></i>` : ''}${esc(label)} <small>${counts[id] || 0}</small></button>`;
-    const top = Object.entries(D.tags).sort((a, b) => b[1] - a[1]).slice(0, 24);
-    return `<nav class="tabs" aria-label="主分類">${tab('all', '全部')}${D.categories.map((c) => tab(c.id, c.name, c.color)).join('')}${counts.none ? tab('none', '未分類') : ''}</nav>
-      ${top.length ? `<nav class="pills" aria-label="熱門標籤">${top.map(([t, n]) => `<a class="pill${route.tag === t ? ' on' : ''}" href="${route.tag === t ? '#/' : '#/tag/' + encodeURIComponent(t)}">#${esc(t)} <small>${n}</small></a>`).join('')}</nav>` : ''}`;
-  }
-  const inCat = (v) => V.cat === 'all' || (V.cat === 'none' ? !catOf(v.categoryId) : v.categoryId === V.cat);
-
-  // ---------- views ----------
-  function viewLibrary(route) {
-    const q = (route.q || '').trim().toLowerCase();
-    const vids = D.videos.filter(inCat);
-    let html = filterBar(route);
-
-    if (route.tag || q) {
-      // cross-video knowledge wall
-      const notes = [];
-      for (const v of vids) for (const n of YVN.liveNotes(v)) {
-        if (route.tag && !(n.tags || []).includes(route.tag)) continue;
-        if (q && !(`${n.text}\n${(n.tags || []).map((t) => '#' + t).join(' ')}\n${v.title}\n${v.channel}`.toLowerCase().includes(q))) continue;
-        notes.push([v, n]);
-      }
-      notes.sort((a, b) => b[1].updatedAt - a[1].updatedAt);
-      const shots = notes.reduce((s, x) => s + x[1].images.length, 0);
-      html += `<div class="bar"><h1>${route.tag ? '#' + esc(route.tag) : '搜尋「' + esc(route.q) + '」'}</h1>
-        <span class="muted">${notes.length} 則筆記 · ${shots} 張截圖 · 跨 ${new Set(notes.map((x) => x[0].videoId)).size} 部影片</span>
-        <a class="btn sm" href="#/">清除篩選</a></div>`;
-      html += notes.length ? `<div class="wall">${notes.map(([v, n]) => noteHTML(v, n, { wall: true, activeTag: route.tag })).join('')}</div>` : '<p class="muted">沒有符合的筆記。</p>';
-      app.innerHTML = html;
-      return;
-    }
-
-    if (!D.videos.length) {
-      app.innerHTML = `<div class="empty"><h2>還沒有任何筆記</h2>
-        <p class="muted">這裡會像 YouTube 觀看紀錄一樣，列出所有你做過截圖筆記的影片。</p>
-        <ol><li>安裝 <b>YT Vision Notes</b> Chrome 擴充功能並登入 Google。</li><li>在 YouTube 播放器按「筆記」圖示，暫停 → 點 <b>[+]</b> 擷取 → 寫幾句話 → 儲存。</li><li>回到這裡按右上角「登入 Google」，筆記就會從你的 Google Drive 同步進來。</li></ol>
-        <button class="btn primary" data-act="sync">登入 Google 並同步</button></div>`;
-      return;
-    }
-    const sorted = vids.slice().sort((a, b) => b.updatedAt - a.updatedAt);
-    let last = '';
-    html += sorted.length ? '' : '<p class="muted">這個分類還沒有影片。</p>';
-    for (const v of sorted) {
-      const label = dayLabel(v.updatedAt);
-      if (label !== last) { html += `${last ? '</div>' : ''}<h2 class="day">${label}</h2><div class="grid">`; last = label; }
-      const s = YVN.summarize(v);
-      html += `<a class="vcard" href="#/video/${v.videoId}">
-        <div class="cover" style="background-image:url('https://i.ytimg.com/vi/${encodeURIComponent(v.videoId)}/mqdefault.jpg')"><span>${s.noteCount} 則筆記 · ${s.imageCount} 張截圖</span></div>
-        <div class="meta"><h3>${esc(v.title || v.videoId)}</h3>
-          <div class="sub">${badge(v.categoryId)}<span>${esc(v.channel || '')}</span><span>· ${YVN.fmtDate(v.updatedAt)}</span></div>
-          ${s.tags.length ? `<div class="tagrow">${s.tags.slice(0, 4).map((t) => `<span class="tag">#${esc(t)}</span>`).join('')}${s.tags.length > 4 ? `<span class="muted">+${s.tags.length - 4}</span>` : ''}</div>` : ''}
-        </div></a>`;
-    }
-    if (last) html += '</div>';
-    app.innerHTML = html;
-  }
-
-  // ----- video detail -----
-  let player = null, playerReady = false, pendingSeek = null;
-  function loadYT() {
-    if (window.YT && YT.Player) return Promise.resolve();
-    return new Promise((res) => {
-      const prev = window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady = () => { if (prev) prev(); res(); };
-      if (!$('script[data-yt]')) { const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; s.dataset.yt = '1'; document.head.appendChild(s); }
-    });
-  }
-  function seek(ts) {
-    if (player && playerReady) { player.seekTo(ts, true); player.playVideo(); } else pendingSeek = ts;
-    const p = $('.player'); if (p && p.getBoundingClientRect().top < 0) p.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-  function destroyPlayer() { if (player && player.destroy) { try { player.destroy(); } catch (e) { /* noop */ } } player = null; playerReady = false; V.videoShell = null; }
-
-  function backlinksHTML(v) {
-    const out = [];
-    const needles = [v.videoId, v.title].filter(Boolean).map((s) => `[[${s}]]`.toLowerCase());
-    for (const o of D.videos) {
-      if (o.videoId === v.videoId) continue;
-      for (const n of YVN.liveNotes(o)) if (needles.some((s) => (n.text || '').toLowerCase().includes(s))) out.push(`<li><a href="#/video/${o.videoId}/${n.ts}">${esc(o.title)} · ${YVN.fmtTime(n.ts)}</a></li>`);
-    }
-    return `<section class="backlinks"><h2>反向連結</h2>${out.length ? `<ul>${out.join('')}</ul>` : `<p class="muted">在其他筆記寫 <code>[[${esc(v.title || v.videoId)}]]</code> 就會出現在這裡。</p>`}</section>`;
-  }
-  function timelineHTML(v) {
-    const notes = YVN.liveNotes(v);
-    return `<h2>${notes.length} 則筆記 · ${notes.reduce((s, n) => s + n.images.length, 0)} 張截圖</h2>
-      ${notes.map((n) => noteHTML(v, n)).join('') || '<p class="muted">這部影片沒有筆記了。</p>'}
-      <article class="note addnote">
-        <textarea class="ta" id="addText" placeholder="補充一則文字筆記（會記錄播放器目前的時間點；支援 Markdown、#標籤、[[雙向連結]]）" aria-label="新增文字筆記"></textarea>
-        <div class="actions"><button class="btn sm primary" data-act="add-note" data-v="${v.videoId}">新增筆記</button></div>
-      </article>
-      ${backlinksHTML(v)}`;
-  }
-  function infoHTML(v) {
-    return `<h1>${esc(v.title || v.videoId)}</h1>
-      <div class="row"><span class="muted">${esc(v.channel || '')}</span>
-        <select class="sel" data-act="set-cat" data-v="${v.videoId}" aria-label="主分類"><option value="">未分類</option>${D.categories.map((c) => `<option value="${c.id}"${c.id === v.categoryId ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
-        <button class="btn sm" data-act="export" data-v="${v.videoId}">匯出 .md + 圖片 ZIP</button>
-        <a class="btn sm" href="${esc(v.url)}" target="_blank" rel="noopener">在 YouTube 開啟 ↗</a>
-        <button class="btn sm danger" data-act="del-video" data-v="${v.videoId}">刪除</button></div>`;
-  }
-  function viewVideo(route) {
-    const v = videoOf(route.videoId);
-    if (!v) { destroyPlayer(); app.innerHTML = `<div class="empty"><h2>找不到這部影片的筆記</h2><p class="muted">可能尚未同步。</p><button class="btn primary" data-act="sync">同步</button> <a class="btn" href="#/">回首頁</a></div>`; return; }
-    if (V.videoShell !== v.videoId) {
-      destroyPlayer();
-      app.innerHTML = `<div class="bar"><a class="btn sm" href="#/">← 知識庫</a></div>
-        <div class="detail"><div class="playercol"><div class="player"><div id="ytp"></div></div><div class="vinfo"></div></div><div class="timeline"></div></div>
-        <datalist id="taglist"></datalist>`;
-      V.videoShell = v.videoId;
-      const start = route.ts || 0;
-      loadYT().then(() => {
-        if (V.videoShell !== v.videoId) return;
-        player = new YT.Player('ytp', {
-          videoId: v.videoId, width: '100%', height: '100%',
-          playerVars: { start, rel: 0, playsinline: 1, origin: location.origin },
-          events: { onReady: () => { playerReady = true; if (pendingSeek != null) { seek(pendingSeek); pendingSeek = null; } } },
-        });
-      });
-    } else if (route.ts != null && route.tsChanged) seek(route.ts);
-    $('.vinfo').innerHTML = infoHTML(v);
-    $('.timeline').innerHTML = timelineHTML(v);
-    $('#taglist').innerHTML = Object.keys(D.tags).map((t) => `<option value="#${esc(t)}">`).join('');
-  }
-
-  // ---------- router ----------
-  let lastHash = '';
-  function parseRoute() {
-    const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
-    if (parts[0] === 'video' && parts[1]) return { name: 'video', videoId: parts[1], ts: parts[2] != null && parts[2] !== '' ? +parts[2] : null };
-    if (parts[0] === 'tag' && parts[1]) return { name: 'library', tag: parts[1] };
-    if (parts[0] === 'search' && parts[1]) return { name: 'library', q: parts.slice(1).join('/') };
-    return { name: 'library' };
-  }
-  function render() {
-    const route = parseRoute();
-    route.tsChanged = location.hash !== lastHash;
-    const navigated = location.hash !== lastHash;
-    lastHash = location.hash;
-    if (route.name === 'video') viewVideo(route);
-    else { destroyPlayer(); viewLibrary(route); }
-    const qEl = $('#q'); if (document.activeElement !== qEl) qEl.value = route.q || '';
-    observeImages();
-    if (navigated && route.name !== 'video') window.scrollTo(0, 0);
-    document.title = route.name === 'video' && videoOf(route.videoId) ? `${videoOf(route.videoId).title} — Vision Notes` : 'YT Vision Notes — 知識庫';
-  }
-  /** Re-render after background sync unless the user is in the middle of typing. */
-  function softRender() {
-    const a = document.activeElement;
-    if (V.editing || (a && app.contains(a) && /TEXTAREA|INPUT/.test(a.tagName) && a.value)) return;
-    const add = $('#addText'); if (add && add.value) return;
-    render();
-  }
-  window.addEventListener('hashchange', () => { V.editing = null; render(); });
-
-  // ---------- actions ----------
-  const metaOf = (v) => ({ videoId: v.videoId, title: v.title, channel: v.channel, duration: v.duration });
-  async function changed() { await reload(); render(); scheduleSync(); }
-  const parseTagInput = (s) => YVN.uniq(String(s || '').split(/[\s,，]+/).map(YVN.normTag));
-
-  function openEditor(videoId, noteId, index) {
-    const v = videoOf(videoId), n = v && v.notes.find((x) => x.id === noteId);
-    if (!n) return;
-    YVN.Editor.open({
-      index,
-      images: n.images.map((img) => ({ id: img.id, ts: img.ts, edits: img.edits, load: () => store.getImageBlob(videoId, img, 'orig', driveOrNull()) })),
-      onSeek: (ts) => { if (V.videoShell === videoId) seek(ts); else location.hash = `#/video/${videoId}/${ts}`; },
-      onSave: async (image, { edits, blob }) => { await store.saveImageEdit(videoId, noteId, image.id, edits, blob); await changed(); },
-    });
-  }
-
-  async function exportZip(videoId) {
-    const v = videoOf(videoId); if (!v) return;
-    toast('正在打包…');
-    const cat = catOf(v.categoryId), files = [];
-    let md = `# ${v.title || v.videoId}\n\n- 影片：${v.url}\n- 頻道：${v.channel || ''}\n- 分類：${cat ? cat.name : '未分類'}\n- 匯出時間：${YVN.fmtDate(Date.now())}\n`;
+  // ---------- export current board as Markdown + images ----------
+  async function exportZip() {
+    const b = await store.getBoard(view.boardId);
+    if (!b) return;
+    const sums = await store.summaries();
+    const items = YVN.liveItems(b).sort((a, c) => a.y - c.y || a.x - c.x);
+    const files = [];
+    const lines = [`# ${b.id === YVN.HOME ? '首頁' : b.title}`, ''];
     let missing = 0;
-    for (const n of YVN.liveNotes(v)) {
-      md += `\n---\n\n## [${YVN.fmtTime(n.ts)}](https://youtu.be/${v.videoId}?t=${n.ts})\n\n`;
-      if (n.tags && n.tags.length) md += n.tags.map((t) => '#' + t).join(' ') + '\n\n';
-      if (n.text) md += n.text.trim() + '\n\n';
-      for (let i = 0; i < n.images.length; i++) {
-        const img = n.images[i];
-        const blob = await store.getImageBlob(v.videoId, img, undefined, driveOrNull());
-        if (!blob) { missing++; continue; }
-        const name = `images/${YVN.fmtTime(img.ts).replace(/:/g, '-')}_${img.id}.webp`;
-        files.push({ name, data: blob });
-        md += `![${YVN.fmtTime(img.ts)} 步驟 ${i + 1}](${name})\n\n`;
-      }
+    for (const it of items) {
+      if (it.type === 'note') {
+        if (it.video) lines.push(`> 總結：[${it.video.title}](https://www.youtube.com/watch?v=${it.video.id})`, '');
+        lines.push(it.text || '', '');
+      } else if (it.image) {
+        const blob = await store.getImageBlob(it.image, null, driveOrNull());
+        const name = `images/${it.image.id}.webp`;
+        if (blob) files.push({ name, data: blob }); else missing++;
+        lines.push(`![](${name})`);
+        if (it.type === 'shot' && it.video) lines.push(`[${YVN.fmtTime(it.ts)}](https://www.youtube.com/watch?v=${it.video.id}&t=${Math.floor(it.ts || 0)}s) ${it.video.title}`);
+        if (it.text) lines.push(it.text);
+        lines.push('');
+      } else if (it.type === 'link') lines.push(`- [${it.title || it.url}](${it.url})`, '');
+      else if (it.type === 'board') lines.push(`- 📁 [[${(sums[it.boardId] || {}).title || '未命名'}]]`, '');
     }
-    const safe = (v.title || v.videoId).replace(/[\\/:*?"<>|]/g, '_').slice(0, 80);
-    files.unshift({ name: `${safe}.md`, data: md });
+    files.unshift({ name: 'board.md', data: lines.join('\n') });
     const zip = await YVN.makeZip(files);
+    const safe = (b.id === YVN.HOME ? '首頁' : b.title || 'board').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(zip); a.download = `${safe}.zip`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 3000);
     toast(missing ? `已匯出（有 ${missing} 張圖片尚未下載，請登入同步後重試）` : '已匯出 ZIP');
   }
 
+  // ---------- settings ----------
   function openSettings() {
     const dlg = $('#dlg');
+    const signOut = () => {
+      if (token && window.google) google.accounts.oauth2.revoke(token.value, () => {});
+      token = null; localStorage.removeItem('yvnToken'); localStorage.removeItem('yvnSignedIn'); renderSync(); draw();
+    };
     const draw = () => {
-      dlg.innerHTML = `<h2>分類與設定</h2>
-        <h3>主分類</h3>
-        <div id="cats">${D.categories.map((c) => `<div class="catrow" data-id="${c.id}"><input type="color" value="${esc(c.color)}" aria-label="代表色"><input class="inp" type="text" value="${esc(c.name)}" maxlength="30" aria-label="分類名稱"><button class="iconbtn" data-del title="刪除分類" aria-label="刪除分類">🗑</button></div>`).join('')}</div>
-        <div class="catrow" id="newcat"><input type="color" value="#f5a524" aria-label="新分類代表色"><input class="inp" type="text" placeholder="新增分類…" maxlength="30" aria-label="新分類名稱"><button class="btn sm" data-add>新增</button></div>
-        <h3>Google OAuth Client ID（Web application）</h3>
-        <input class="inp" id="cid" value="${esc(clientId())}" placeholder="xxxxxxxx.apps.googleusercontent.com" spellcheck="false">
-        <p class="muted" style="font-size:13px">只存在這個瀏覽器。${tokenValid() ? '目前已登入。' : ''}</p>
-        <div class="actions">${localStorage.getItem('yvnSignedIn') ? '<button class="btn sm danger" data-signout>登出 Google</button>' : ''}<button class="btn sm primary" data-close>完成</button></div>`;
+      const cid = el('input', { class: 'inp', id: 'cid', value: clientId(), placeholder: 'xxxxxxxx.apps.googleusercontent.com', spellcheck: 'false' });
+      cid.value = clientId();
+      cid.onchange = () => { localStorage.setItem('yvnClientId', cid.value.trim()); tokenClient = null; };
+      dlg.replaceChildren(
+        el('h2', {}, '設定'),
+        el('h3', {}, 'Google OAuth Client ID（Web application）'),
+        cid,
+        el('p', { class: 'muted' }, '只存在這個瀏覽器。' + (tokenValid() ? '目前已登入。' : '')),
+        el('h3', {}, '操作方式'),
+        el('ul', { class: 'help' },
+          el('li', {}, '拖曳空白處或滾輪：移動畫布；Ctrl + 滾輪：縮放'),
+          el('li', {}, '雙擊空白處：新增筆記；雙擊卡片：編輯；雙擊截圖：開啟標註編輯器'),
+          el('li', {}, '把卡片拖到 Board 上：移進那個 Board；Shift + 拖曳：框選多張'),
+          el('li', {}, '可直接貼上或拖入圖片、網址；Delete 刪除選取的卡片')),
+        el('div', { class: 'actions' },
+          localStorage.getItem('yvnSignedIn') && el('button', { class: 'btn danger', onclick: signOut }, '登出 Google'),
+          el('button', { class: 'btn primary', onclick: () => dlg.close() }, '完成')));
     };
     draw();
-    dlg.onclick = async (e) => {
-      const t = e.target;
-      if (t.matches('[data-close]')) return dlg.close();
-      if (t.matches('[data-signout]')) {
-        if (token && window.google) google.accounts.oauth2.revoke(token.value, () => {});
-        token = null; localStorage.removeItem('yvnToken'); localStorage.removeItem('yvnSignedIn'); renderSync(); return draw();
-      }
-      if (t.matches('[data-add]')) {
-        const row = $('#newcat', dlg), name = $('input[type=text]', row).value.trim();
-        if (!name) return;
-        await store.upsertCategory({ name, color: $('input[type=color]', row).value });
-        await changed(); return draw();
-      }
-      if (t.matches('[data-del]')) {
-        const id = t.closest('.catrow').dataset.id, c = catOf(id);
-        if (!confirm(`刪除分類「${c.name}」？影片與筆記不會被刪除。`)) return;
-        await store.deleteCategory(id); await changed(); return draw();
-      }
-    };
-    dlg.onchange = async (e) => {
-      if (e.target.id === 'cid') { localStorage.setItem('yvnClientId', e.target.value.trim()); tokenClient = null; return; }
-      const row = e.target.closest('.catrow[data-id]');
-      if (!row) return;
-      const name = $('input[type=text]', row).value.trim();
-      if (!name) return;
-      await store.upsertCategory({ id: row.dataset.id, name, color: $('input[type=color]', row).value });
-      await changed();
-    };
     if (!dlg.open) dlg.showModal();
   }
 
-  document.addEventListener('click', async (e) => {
-    // links rendered from markdown
-    const mdA = e.target.closest('.md a.yvn-ts');
-    if (mdA) {
-      e.preventDefault();
-      const vid = mdA.closest('.md').dataset.v;
-      if (V.videoShell === vid) seek(+mdA.dataset.ts); else location.hash = `#/video/${vid}/${mdA.dataset.ts}`;
-      return;
-    }
-    const t = e.target.closest('[data-act]');
-    if (!t) return;
-    const { act, v, n } = t.dataset;
-    switch (act) {
-      case 'cat': V.cat = t.dataset.cat; sessionStorage.setItem('yvnCat', V.cat); return render();
-      case 'sync': return sync(true);
-      case 'seek':
-        e.preventDefault(); e.stopPropagation();
-        if (V.videoShell === v) seek(+t.dataset.ts); else location.hash = `#/video/${v}/${t.dataset.ts}`;
-        return;
-      case 'open': return openEditor(v, n, +t.dataset.i);
-      case 'edit': V.editing = n; render(); { const ta = $('#editText'); if (ta) ta.focus(); } return;
-      case 'edit-cancel': V.editing = null; return render();
-      case 'edit-save': {
-        const vid = videoOf(v), note = vid.notes.find((x) => x.id === n);
-        await store.upsertNote(metaOf(vid), { id: n, ts: note.ts, text: $('#editText').value, tags: parseTagInput($('#editTags').value), images: note.images });
-        V.editing = null; return changed();
-      }
-      case 'del-note':
-        if (!confirm('確定刪除這則筆記與其截圖？')) return;
-        await store.deleteNote(v, n); return changed();
-      case 'add-note': {
-        const body = $('#addText').value.trim();
-        if (!body) return toast('請先輸入內容');
-        const ts = player && playerReady ? Math.floor(player.getCurrentTime() || 0) : 0;
-        await store.upsertNote(metaOf(videoOf(v)), { ts, text: body, tags: [], images: [] });
-        return changed();
-      }
-      case 'export': return exportZip(v);
-      case 'del-video':
-        if (!confirm('確定刪除這部影片的所有筆記與截圖？此動作會同步到 Google Drive。')) return;
-        await store.deleteVideo(v); await reload(); scheduleSync(); location.hash = '#/'; return;
-    }
+  // ---------- routing ----------
+  const parseHash = () => {
+    const m = /^#\/b\/([^/]+)(?:\/([^/]+))?/.exec(location.hash);
+    return m ? { board: decodeURIComponent(m[1]), item: m[2] ? decodeURIComponent(m[2]) : null } : { board: YVN.HOME, item: null };
+  };
+  let ignoreHash = false;
+  const boardEl = $('#board');
+  const dark = matchMedia('(prefers-color-scheme: dark)');
+  const applyTheme = () => boardEl.classList.toggle('yb-dark', dark.matches);
+  dark.addEventListener('change', applyTheme);
+
+  const view = new YVN.BoardView(boardEl, api, {
+    mode: 'web',
+    seek,
+    toast,
+    headerExtras: [
+      el('button', { class: 'yb-hbtn', title: '把這個 Board 匯出成 Markdown + 圖片 ZIP', onclick: exportZip }, '匯出'),
+      syncBtn,
+      el('button', { class: 'yb-hbtn', title: '設定', 'aria-label': '設定', onclick: openSettings }, '⚙'),
+    ],
+    onNavigate: (id) => {
+      const want = id === YVN.HOME ? '#/' : `#/b/${encodeURIComponent(id)}`;
+      if (location.hash !== want && !(id === YVN.HOME && !location.hash)) { ignoreHash = true; location.hash = want; }
+      store.getBoard(id).then((b) => { document.title = `${b && b.id !== YVN.HOME ? b.title + ' — ' : ''}YT Vision Notes`; });
+    },
   });
-  document.addEventListener('change', async (e) => {
-    const t = e.target.closest('[data-act=set-cat]');
-    if (t) { await store.setVideoMeta(t.dataset.v, { categoryId: t.value || null }); await changed(); }
+  applyTheme();
+  window.addEventListener('hashchange', () => {
+    if (ignoreHash) { ignoreHash = false; return; }
+    const r = parseHash();
+    view.open(r.board, r.item);
   });
-  document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      const btn = e.target.id === 'editText' || e.target.id === 'editTags' ? $('[data-act=edit-save]') : e.target.id === 'addText' ? $('[data-act=add-note]') : null;
-      if (btn) { e.preventDefault(); btn.click(); }
-    } else if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !$('.yvne-root')) { e.preventDefault(); $('#q').focus(); }
-  });
-  $('#searchForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const q = $('#q').value.trim();
-    location.hash = !q ? '#/' : q.startsWith('#') && !/\s/.test(q) ? `#/tag/${encodeURIComponent(YVN.normTag(q))}` : `#/search/${encodeURIComponent(q)}`;
-  });
-  $('#syncBtn').addEventListener('click', () => sync(true));
-  $('#settingsBtn').addEventListener('click', openSettings);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && tokenValid()) scheduleSync(); });
 
   // ---------- boot ----------
-  window.yvnApp = { store, reload, render }; // handy for debugging in DevTools
+  window.yvnApp = { store, view, sync };
   (async () => {
-    await reload();
-    render(); renderSync();
+    await store.init();
+    renderSync();
+    const r = parseHash();
+    await view.open(r.board, r.item);
     if (tokenValid()) sync(false);
   })();
 })();

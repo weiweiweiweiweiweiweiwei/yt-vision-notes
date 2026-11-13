@@ -27,10 +27,16 @@
     return s;
   }
 
+  /** Flip the n-th "- [ ]" task in markdown text. */
+  YVN.toggleTask = function (md, n) {
+    let k = -1;
+    return String(md || '').replace(/^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\]/gm, (all, pre, mark) => (++k === n ? `${pre}[${mark === ' ' ? 'x' : ' '}]` : all));
+  };
+
   YVN.renderMarkdown = function (md) {
     const lines = String(md || '').replace(/\r\n?/g, '\n').split('\n');
     const out = [];
-    let i = 0, para = [];
+    let i = 0, para = [], taskN = 0;
     const flush = () => { if (para.length) { out.push(`<p>${para.map(inline).join('<br>')}</p>`); para = []; } };
     while (i < lines.length) {
       const line = lines[i];
@@ -67,7 +73,7 @@
           const task = /^\[([ xX])\]\s+/.exec(t);
           if (task) {
             t = t.slice(task[0].length);
-            items.push(`<li class="yvn-task"><input type="checkbox" disabled${task[1] === ' ' ? '' : ' checked'}> ${inline(t)}</li>`);
+            items.push(`<li class="yvn-task"><input type="checkbox" data-task="${taskN++}"${task[1] === ' ' ? '' : ' checked'}> ${inline(t)}</li>`);
           } else items.push(`<li>${inline(t)}</li>`);
         }
         out.push(ordered ? `<ol>${items.join('')}</ol>` : `<ul>${items.join('')}</ul>`);
