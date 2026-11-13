@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>YT Vision Notes</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { width: 320px; margin: 0; padding: 14px; font: 14px/1.5 "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
+  h1 { font-size: 16px; margin: 0 0 10px; }
+  p { margin: 0 0 10px; }
+  .muted { opacity: .7; font-size: 12px; }
+  .row { display: flex; gap: 8px; margin-bottom: 10px; }
+  button { flex: 1; height: 34px; border-radius: 8px; border: 1px solid #8884; background: #8882; font: inherit; color: inherit; cursor: pointer; }
+  button.primary { background: #3e63dd; color: #fff; border-color: transparent; font-weight: 600; }
+  button:disabled { opacity: .5; }
+  label { display: block; font-size: 12px; opacity: .8; margin-bottom: 4px; }
+  input { width: 100%; box-sizing: border-box; height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid #8886; background: transparent; color: inherit; font: inherit; }
+  #err { color: #e5484d; font-size: 12px; overflow-wrap: anywhere; }
+  a { color: #3e63dd; }
+</style>
+</head>
+<body>
+  <h1>YT Vision Notes</h1>
+  <p id="state">讀取中…</p>
+  <p class="muted" id="counts"></p>
+  <div class="row">
+    <button id="auth" class="primary">登入 Google</button>
+    <button id="sync">立即同步</button>
+  </div>
+  <p id="err"></p>
+  <label for="web">知識庫網站網址（GitHub Pages）</label>
+  <div class="row">
+    <input id="web" type="url" placeholder="https://你的帳號.github.io/yt-vision-notes/">
+  </div>
+  <div class="row">
+    <button id="open">開啟知識庫</button>
+  </div>
+  <p class="muted">在 YouTube 播放器右下角點「筆記」圖示開啟工作區。Alt+S 可快速擷取畫面。</p>
+  <script src="popup.js"></script>
+</body>
+</html>

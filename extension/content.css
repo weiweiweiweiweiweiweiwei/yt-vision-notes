@@ -1,0 +1,119 @@
+/* YT-Vision-Notes — in-page workspace. Follows YouTube's own light/dark theme through its CSS variables.
+   NOTE: YouTube sets html{font-size:10px}, so everything here is in px. */
+
+/* player toggle */
+.ytp-button.yvn-toggle { opacity: .9; vertical-align: top; }
+.ytp-button.yvn-toggle.on { color: #ffd60a; opacity: 1; }
+
+/* replace the recommendation column */
+html.yvn-on ytd-watch-flexy #secondary-inner,
+html.yvn-on ytd-watch-flexy #secondary #related { display: none !important; }
+html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) {
+  --ytd-watch-flexy-sidebar-width: clamp(402px, 32vw, 560px);
+  --ytd-watch-flexy-sidebar-min-width: 380px;
+}
+html:not(.yvn-on) #yvn-panel { display: none; }
+
+#yvn-panel {
+  --bg: var(--yt-spec-base-background, #fff);
+  --raised: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, .05));
+  --line: var(--yt-spec-10-percent-layer, rgba(0, 0, 0, .1));
+  --fg: var(--yt-spec-text-primary, #0f0f0f);
+  --fg2: var(--yt-spec-text-secondary, #606060);
+  --accent: #3e63dd;
+  position: sticky; top: 72px; max-height: calc(100vh - 88px); overflow-y: auto; overscroll-behavior: contain;
+  box-sizing: border-box; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--fg);
+  font: 14px/1.5 "Roboto", "Noto Sans TC", "Microsoft JhengHei", sans-serif; margin-bottom: 24px;
+}
+#yvn-panel *, #yvn-panel *::before { box-sizing: border-box; }
+#yvn-panel [hidden] { display: none !important; }
+#yvn-panel button, #yvn-panel select, #yvn-panel input, #yvn-panel textarea { font: inherit; color: inherit; }
+#yvn-panel :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.yvn-head {
+  position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 10px 12px;
+  background: var(--bg); border-bottom: 1px solid var(--line); border-radius: 12px 12px 0 0;
+}
+.yvn-head strong { font-size: 15px; margin-right: 4px; white-space: nowrap; }
+.yvn-grow { flex: 1; }
+.yvn-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; border: 1px solid var(--line); }
+.yvn-cat { max-width: 150px; height: 30px; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); cursor: pointer; }
+.yvn-cat option { color: #0f0f0f; background: #fff; }
+.yvn-icon { width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-size: 15px; flex: none; }
+.yvn-icon:hover { background: var(--raised); }
+.yvn-sync { width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; position: relative; flex: none; }
+.yvn-sync::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: #8b8d98; }
+.yvn-sync.ok::before { background: #30a46c; }
+.yvn-sync.err::before { background: #e5484d; }
+.yvn-sync.busy::before { background: #f5a524; animation: yvn-pulse 1s infinite; }
+@keyframes yvn-pulse { 50% { transform: scale(.55); opacity: .6; } }
+
+.yvn-catmgr { padding: 10px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+.yvn-catrow { display: flex; gap: 6px; align-items: center; }
+.yvn-catrow input[type=color] { width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; flex: none; }
+.yvn-catrow input[type=text] { flex: 1; min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); }
+
+.yvn-draft { padding: 12px; display: grid; gap: 10px; border-bottom: 1px solid var(--line); }
+.yvn-draft.yvn-editing { box-shadow: inset 3px 0 0 #f5a524; }
+.yvn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.yvn-end { justify-content: flex-end; }
+.yvn-btn { height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 17px; background: var(--raised); cursor: pointer; white-space: nowrap; }
+.yvn-btn:hover { filter: brightness(.95); }
+.yvn-btn:disabled { opacity: .5; cursor: default; }
+.yvn-primary { background: var(--accent); border-color: transparent; color: #fff !important; font-weight: 600; padding: 0 18px; }
+.yvn-capture {
+  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px 0 8px; border: 0; border-radius: 22px;
+  background: #e5484d; color: #fff !important; font-weight: 700; font-size: 15px !important; cursor: pointer; margin-right: auto;
+}
+.yvn-capture b { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: rgba(255, 255, 255, .22); font-size: 24px; line-height: 1; font-weight: 400; }
+.yvn-capture:hover { background: #d13438; }
+.yvn-capture.yvn-flash { animation: yvn-flash .35s; }
+@keyframes yvn-flash { 0% { box-shadow: 0 0 0 0 rgba(229, 72, 77, .7); } 100% { box-shadow: 0 0 0 14px rgba(229, 72, 77, 0); } }
+.yvn-hint, .yvn-empty { margin: 0; color: var(--fg2); font-size: 13px; }
+
+.yvn-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.yvn-thumb { position: relative; flex: 0 0 auto; width: 136px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #000; cursor: zoom-in; border: 2px solid transparent; }
+.yvn-saved .yvn-thumb { width: 152px; }
+.yvn-thumb.yvn-over { border-color: var(--accent); }
+.yvn-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; color: #aaa; font-size: 11px; }
+.yvn-badge { position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border: 0; border-radius: 4px; background: rgba(0, 0, 0, .78); color: #fff !important; font-size: 11px !important; font-variant-numeric: tabular-nums; }
+button.yvn-badge { cursor: pointer; }
+button.yvn-badge:hover { background: var(--accent); }
+.yvn-x { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .7); color: #fff !important; cursor: pointer; line-height: 1; font-size: 15px !important; opacity: 0; }
+.yvn-thumb:hover .yvn-x, .yvn-x:focus-visible { opacity: 1; }
+
+.yvn-text { width: 100%; min-height: 96px; resize: vertical; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); line-height: 1.6; }
+.yvn-tagbox { position: relative; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); }
+.yvn-chips { display: contents; }
+.yvn-chip, .yvn-tag { display: inline-flex; align-items: center; gap: 2px; padding: 1px 8px; border-radius: 12px; background: rgba(62, 99, 221, .16); color: var(--fg) !important; font-size: 13px; text-decoration: none; }
+.yvn-chip button { border: 0; background: none; cursor: pointer; padding: 0 0 0 2px; opacity: .6; }
+.yvn-taginput { flex: 1; min-width: 120px; height: 26px; border: 0; background: transparent; outline: none !important; }
+.yvn-suggest { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+.yvn-suggest li { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.yvn-suggest li:hover, .yvn-suggest li.on { background: var(--raised); }
+.yvn-suggest small { color: var(--fg2); }
+
+.yvn-list { padding: 12px; }
+.yvn-list h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--fg2); }
+.yvn-notes { display: grid; gap: 10px; }
+.yvn-note { padding: 10px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 8px; min-width: 0; }
+.yvn-note header { display: flex; align-items: center; gap: 4px; }
+.yvn-tsbtn { height: 26px; padding: 0 10px; border: 0; border-radius: 13px; background: var(--accent); color: #fff !important; font-weight: 600; cursor: pointer; font-variant-numeric: tabular-nums; }
+.yvn-tagrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.yvn-md { overflow-wrap: anywhere; }
+.yvn-md > :first-child { margin-top: 0; } .yvn-md > :last-child { margin-bottom: 0; }
+.yvn-md p, .yvn-md ul, .yvn-md ol, .yvn-md blockquote, .yvn-md pre { margin: 0 0 8px; }
+.yvn-md h3, .yvn-md h4, .yvn-md h5, .yvn-md h6 { margin: 10px 0 6px; font-size: 15px; }
+.yvn-md ul, .yvn-md ol { padding-left: 22px; }
+.yvn-md li.yvn-task { list-style: none; margin-left: -20px; }
+.yvn-md blockquote { padding: 4px 10px; border-left: 3px solid var(--accent); color: var(--fg2); background: var(--raised); border-radius: 0 6px 6px 0; }
+.yvn-md code { padding: 1px 5px; border-radius: 4px; background: var(--raised); font: 13px ui-monospace, Consolas, monospace; }
+.yvn-md pre { padding: 8px 10px; border-radius: 8px; background: var(--raised); overflow-x: auto; }
+.yvn-md pre code { padding: 0; background: none; }
+.yvn-md a { color: var(--yt-spec-call-to-action, #065fd4); }
+.yvn-md a.yvn-ts { font-variant-numeric: tabular-nums; font-weight: 600; }
+.yvn-md mark { background: #ffd60a; color: #111; padding: 0 2px; border-radius: 2px; }
+
+.yvn-toast { position: sticky; bottom: 10px; margin: 0 12px 10px; padding: 8px 12px; border-radius: 8px; background: #111; color: #fff; font-size: 13px; text-align: center; z-index: 6; }
+
+@media (prefers-reduced-motion: reduce) { .yvn-capture.yvn-flash, .yvn-sync.busy::before { animation: none; } }
