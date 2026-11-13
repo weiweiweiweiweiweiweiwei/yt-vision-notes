@@ -28,6 +28,9 @@ YouTube 沉浸式截圖筆記：**Chrome 擴充功能**（在 YouTube 旁邊直�
 
 **白板操作（三處相同）**
 - 卡片種類：筆記（Markdown、`#標籤`、`[[連結]]`、`[mm:ss]`）、截圖、圖片、Board、待辦（可直接勾選）、連結（YouTube 連結會顯示縮圖）。
+- **欄（Column）**：把卡片拖進欄就會整齊排成一直排，可在欄內上下調整順序、拖出來恢復自由擺放；拖欄的標題可整欄移動，雙擊標題改名。
+- **連線（Line）**：工具列「連線」後，從一張卡片拖到另一張卡片（也可以拉到空白處）。卡片移動時線會跟著走；選取後可拖端點重新連接，右鍵可改單向／雙向／無箭頭、反轉方向、改顏色、加文字（也可雙擊線）。
+- **色票（Color）**：顏色卡片，雙擊可用調色盤或輸入 `#RRGGBB` 修改並命名，點色碼即可複製。
 - 拖曳空白處或滾輪移動畫布，`Ctrl + 滾輪` 縮放；雙擊空白處新增筆記；雙擊卡片編輯；拖右下角改寬度。
 - **把卡片拖到 Board 卡上 → 移進那個 Board**；右鍵或 `⋯` 選單也能「移到 Board…／移到上一層」、改顏色、刪除。
 - `Shift + 拖曳` 框選多張、`Delete` 刪除、`Ctrl + F` 搜尋所有 Board、可直接貼上或拖入圖片與網址。
@@ -123,7 +126,12 @@ YT-Vision-Notes/
       "image": { "id": "img_x", "w": 1920, "h": 1080, "fileId": "…", "editedFileId": "…", "editedAt": 0,
                  "edits": { "crop": { "x": 0, "y": 0, "w": 800, "h": 450 }, "shapes": [ … ] } } },
     { "id": "i_4", "type": "image", "image": { … } },
-    { "id": "i_5", "type": "link", "url": "https://…", "title": "…" }
+    { "id": "i_5", "type": "link", "url": "https://…", "title": "…" },
+    { "id": "i_6", "type": "column", "title": "步驟", "x": 0, "y": 0, "w": 300 },
+    { "id": "i_7", "type": "note", "col": "i_6", "ord": 0, "text": "…" },                // col = 放在哪個欄、ord = 欄內順序
+    { "id": "i_8", "type": "line", "from": { "id": "i_2", "x": 0, "y": 0 }, "to": { "x": 600, "y": 200 },
+      "arrow": "end", "label": "因為", "color": null },                                    // 端點黏在卡片 (id) 或空白處 (x,y)
+    { "id": "i_9", "type": "color", "hex": "#1e90ff", "name": "天空藍", "w": 160 }
     // 每張卡片都有 createdAt / updatedAt / deleted
   ]
 }
@@ -142,5 +150,5 @@ YT-Vision-Notes/
 - 網站的 Google 登入權杖有效約 1 小時，過期後按一下右上角「重新連線」即可（Google 對純前端網站的限制）；擴充功能端不受影響。
 - 擴充功能使用 `chrome.identity`，需在 Google Chrome 使用（Edge/Brave 的行為不同）。
 - 同一張卡片在兩台裝置上「同時」被修改時（例如一邊移動、一邊改文字），較晚的那次修改整張卡片勝出。
-- 白板目前還沒有：卡片之間的連線（Line）、欄（Column）、色票卡（Color）、表格。
+- 白板目前還沒有：表格（Table）、手繪（Draw）。
 - YouTube 改版若更動 `.ytp-right-controls`、`#columns`、`#secondary` 或 `--ytd-watch-flexy-sidebar-width` 等，需調整 `extension/content.js` / `content.css`。

@@ -164,7 +164,7 @@
   //   video = { id, title, channel }
   // =====================================================================================
   YVN.BOARD_COLORS = ['#e5484d', '#f76b15', '#f5a524', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#8b8d98'];
-  YVN.CARD_W = { note: 260, shot: 240, image: 240, board: 120, link: 240 };
+  YVN.CARD_W = { note: 260, shot: 240, image: 240, board: 120, link: 240, column: 300, color: 160 };
 
   YVN.emptyBoard = (id, title, parentId) => {
     const now = Date.now();
@@ -188,7 +188,7 @@
     .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/gm, '')
     .replace(/^#{1,6}\s+/gm, '').replace(/^>\s?/gm, '')
     .replace(/->|<-|\*\*|~~|\+\+|==|`/g, '').replace(/(^|\s)\*(\S)/g, '$1$2').replace(/(\S)\*(\s|$)/g, '$1$2');
-  YVN.itemText = (it) => [YVN.plainText(it.text), it.title, it.url, it.video && it.video.title].filter(Boolean).join(' ');
+  YVN.itemText = (it) => [YVN.plainText(it.text), it.title, it.url, it.video && it.video.title, it.name, it.hex, it.label].filter(Boolean).join(' ');
 
   function mergeItem(win, lose) {
     const a = win.image, b = lose.image;
@@ -230,6 +230,9 @@
       const im = it.image || {};
       h = Math.round(w * ((im.h || 9) / (im.w || 16))) + (it.type === 'shot' || it.text ? 34 : 0) + (it.text ? Math.ceil(it.text.length / 18) * 20 : 0);
     } else if (it.type === 'board') h = 120;
+    else if (it.type === 'line') return { w: 0, h: 0 };
+    else if (it.type === 'column') h = 300;
+    else if (it.type === 'color') h = 160;
     else if (it.type === 'link') h = /youtu/.test(it.url || '') ? Math.round(w * 9 / 16) + 56 : 64;
     else h = 48 + Math.max(1, (it.text || '').split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / (w / 15))), 0)) * 22 + (it.video ? 26 : 0);
     return { w, h };
@@ -242,11 +245,12 @@
   YVN.findSlot = (items, w, h, opts) => {
     opts = opts || {};
     const gap = 20, sizeOf = opts.sizeOf || YVN.estimateSize;
-    const rects = items.filter((i) => !i.deleted).map((i) => ({ x: i.x, y: i.y, ...sizeOf(i) }));
+    // lines have no box and cards inside a column are positioned by the column
+    const rects = items.filter((i) => !i.deleted && i.type !== 'line' && !i.col && i.x != null).map((i) => ({ x: i.x, y: i.y, ...sizeOf(i) }));
     const free = (x, y) => rects.every((r) => x + w + gap / 2 <= r.x || x >= r.x + r.w + gap / 2 || y + h + gap / 2 <= r.y || y >= r.y + r.h + gap / 2);
     const left = opts.left != null ? opts.left : 40, top = opts.top != null ? opts.top : 40;
     const maxW = opts.maxW || 1200;
-    const a = opts.after;
+    const a = opts.after && opts.after.type !== 'line' && !opts.after.col ? opts.after : null;
     if (a) {
       const s = sizeOf(a);
       const cands = [[a.x + s.w + gap, a.y], [left, a.y + s.h + gap], [a.x, a.y + s.h + gap]];

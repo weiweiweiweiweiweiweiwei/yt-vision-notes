@@ -55,9 +55,9 @@
 .yb-empty { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: min(320px, 80%); text-align: center; color: var(--yb-fg2); font-size: 14px; pointer-events: none; }
 
 /* toolbars */
-.yb-tools { display: flex; flex-direction: column; gap: 2px; padding: 8px 6px; border-right: 1px solid var(--yb-line); background: var(--yb-head); overflow-y: auto; flex: none; }
+.yb-tools { display: flex; flex-direction: column; gap: 0; padding: 6px; scrollbar-width: none; border-right: 1px solid var(--yb-line); background: var(--yb-head); overflow-y: auto; flex: none; }
 .yb-bar { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--yb-line); background: var(--yb-head); }
-.yb-tool { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 58px; padding: 6px 4px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--yb-fg2); font-size: 12px !important; }
+.yb-tool { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 56px; padding: 5px 4px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--yb-fg2); font-size: 12px !important; }
 .yb-tool:hover { background: var(--yb-raised); color: var(--yb-fg); }
 .yb-bar .yb-tool { flex-direction: row; gap: 6px; min-width: 0; height: 38px; padding: 0 12px; border-color: var(--yb-line); font-size: 13px !important; }
 .yb-bar .yb-tool:last-child { margin-left: auto; }
@@ -155,7 +155,7 @@
 .yb-danger { color: #e5484d !important; }
 .yb-menu hr { border: 0; border-top: 1px solid var(--yb-line); margin: 4px 0; }
 .yb-colors { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 8px; }
-.yb-color { width: 20px; height: 20px; border: 1px solid var(--yb-line); border-radius: 50%; padding: 0; }
+.yb-swbtn { width: 20px; height: 20px; border: 1px solid var(--yb-line); border-radius: 50%; padding: 0; }
 .yb-nocolor { background: linear-gradient(135deg, transparent 45%, #e5484d 45% 55%, transparent 55%), var(--yb-card); }
 .yb-search { position: absolute; z-index: 25; top: 50px; left: 50%; transform: translateX(-50%); width: min(520px, calc(100% - 16px)); max-height: 70%; display: flex; flex-direction: column; border: 1px solid var(--yb-line); border-radius: 12px; background: var(--yb-card); box-shadow: 0 12px 36px rgba(0, 0, 0, .25); }
 .yb-srow { display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--yb-line); }
@@ -211,3 +211,44 @@
 .yb-tnote { flex: 1; color: var(--yb-fg2); font-size: 12px; }
 .yb-trow { flex-direction: row !important; align-items: center; gap: 8px; cursor: default !important; }
 .yb-trow > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ---------- columns ---------- */
+.yb { --yb-linec: #8b8d98; --yb-colbg: #e9e9e6; }
+.yb.yb-dark, .yb-dark .yb { --yb-linec: #9a9ba3; --yb-colbg: #232428; }
+.yb-column { background: var(--yb-colbg); padding: 0 8px 8px; }
+.yb-colhead { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 4px 6px; cursor: grab; }
+.yb-coltitle { flex: 1; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yb-colcount { color: var(--yb-fg2); font-size: 12px; }
+.yb-colhead .yb-rename { flex: 1; width: auto; }
+.yb-colbody { display: flex; flex-direction: column; gap: 8px; min-height: 56px; }
+.yb-colbody.yb-colempty::before { content: "把卡片拖進來"; display: grid; place-items: center; height: 56px; border: 1px dashed var(--yb-line); border-radius: 6px; color: var(--yb-fg2); font-size: 12px; }
+.yb-colbody:has(.yb-colins).yb-colempty::before { display: none; }
+.yb-item.yb-incol { position: relative !important; left: auto !important; top: auto !important; width: auto !important; flex: none; }
+.yb-column.yb-coldrop { outline: 2px dashed var(--yb-accent); outline-offset: 2px; }
+.yb-colins { height: 4px; margin: -2px 0; border-radius: 2px; background: var(--yb-accent); flex: none; }
+.yb-column > .yb-more { top: 8px; }
+
+/* ---------- color swatches ---------- */
+.yb-swatch { height: 110px; border-radius: 5px 5px 0 0; }
+.yb-cbar + .yb-swatch { border-radius: 0; }
+.yb-swfoot { display: flex; flex-direction: column; padding: 7px 10px 9px; gap: 1px; }
+.yb-swfoot b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yb-hex { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--yb-fg2) !important; font: 12px ui-monospace, Consolas, monospace !important; }
+.yb-hex:hover { color: var(--yb-accent) !important; text-decoration: underline; }
+.yb-swedit { display: flex; flex-direction: column; gap: 6px; }
+.yb-swrow { display: flex; gap: 6px; }
+.yb-swpick { width: 36px; height: 32px; padding: 0; border: 1px solid var(--yb-line); border-radius: 6px; background: none; cursor: pointer; flex: none; }
+.yb-swedit .yb-input { height: 30px; font-size: 13px; }
+
+/* ---------- lines ---------- */
+.yb-lines { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+.yb-lines .yb-hit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; cursor: pointer; }
+.yb-lines .yb-vis { fill: none; stroke-width: 2.5; stroke-linecap: round; }
+.yb-lines .yb-lsel .yb-vis { stroke-width: 3.5; filter: drop-shadow(0 0 3px var(--yb-accent)); }
+.yb-lines .yb-lprev .yb-vis { stroke-dasharray: 6 5; }
+.yb-lines .yb-hnd { fill: var(--yb-card); stroke: var(--yb-accent); stroke-width: 2.5; pointer-events: all; cursor: move; }
+.yb-llabels { position: absolute; left: 0; top: 0; }
+.yb-llabel { position: absolute; transform: translate(-50%, -50%); max-width: 220px; padding: 2px 8px; border-radius: 5px; background: var(--yb-bg); border: 1px solid var(--yb-line); color: var(--yb-fg); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; z-index: 1; }
+.yb-llabel.yb-lsel { border-color: var(--yb-accent); }
+.yb-lblinput { position: absolute; transform: translate(-50%, -50%); width: 180px; z-index: 20; }
+.yb-vp.yb-linemode, .yb-vp.yb-linemode .yb-item { cursor: crosshair !important; }

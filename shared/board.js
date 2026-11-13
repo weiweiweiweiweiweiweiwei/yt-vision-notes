@@ -56,6 +56,9 @@
     close: '<path d="M6 6l12 12M18 6 6 18"/>',
     dock: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M14 5v14"/>',
     comment: '<path d="M4 5h16v11H10l-4 4v-4H4z"/>',
+    column: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h8"/>',
+    line: '<path d="M5 19 19 5"/><path d="M12 5h7v7"/>',
+    swatch: '<rect x="4" y="4" width="12" height="16" rx="2"/><path d="M4 14h12"/><path d="m16 7 4 2-4 9"/>',
     undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
     redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
@@ -130,6 +133,9 @@
         ['board', 'board', 'Board', '新增子 Board'],
         ['todo', 'todo', '待辦', '待辦清單'],
         ['link', 'link', '連結', '網址或 YouTube 影片'],
+        ['column', 'column', '欄', '欄：把卡片收成一直排，可整欄移動'],
+        ['line', 'line', '連線', '在卡片之間拉線或箭頭'],
+        ['color', 'swatch', '色票', '顏色色票卡（點色碼即可複製）'],
         ['upload', 'image', '圖片', '上傳圖片（也可以貼上或拖曳）'],
       ].filter(Boolean);
       const btn = ([act, ic, label, title]) => el('button', { class: 'yb-tool' + (act === 'shot' ? ' yb-primary' : ''), title, dataset: { tool: act }, onclick: () => this.tool(act) }, icon(ic, 20), el('span', {}, label));
@@ -182,7 +188,7 @@
       if (!q) return;
       const res = await this.api.search(q);
       if (!res.length) { this.sList.append(el('li', { class: 'yb-snone' }, '找不到符合的筆記')); return; }
-      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結' };
+      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票' };
       for (const r of res) {
         const text = (r.text || '').replace(/\s+/g, ' ');
         this.sList.append(el('li', { tabindex: '0', onclick: () => { this.toggleSearch(false); this.open(r.type === 'board' && !r.itemId ? r.boardId : r.boardId, r.itemId); } },
@@ -295,12 +301,22 @@
       this._applyView(); this._saveView();
     }
     _rectOf(it) {
+      if (it.type === 'line') return { x: 0, y: 0, w: 0, h: 0 };
       const e = this.els.get(it.id);
+      if (e && e.isConnected && this._inCol(it)) return this._layerRect(e);
       if (e && e.offsetWidth) return { x: it.x, y: it.y, w: e.offsetWidth, h: e.offsetHeight };
       return { x: it.x, y: it.y, ...YVN.estimateSize(it) };
     }
+    /** Element box in board coordinates (works for cards inside columns and while dragging). */
+    _layerRect(e) {
+      const r = e.getBoundingClientRect(), v = this.vp.getBoundingClientRect(), z = this.view.z;
+      return { x: (r.left - v.left - this.view.x) / z, y: (r.top - v.top - this.view.y) / z, w: r.width / z, h: r.height / z };
+    }
+    _inCol(it) { return !!(it && it.col && this._colIds && this._colIds.has(it.col)); }
+    /** Free-floating cards (not lines, not cards stacked inside a column). */
+    _cards() { return YVN.liveItems(this.board).filter((i) => i.type !== 'line' && !this._inCol(i)); }
     fit() {
-      const items = YVN.liveItems(this.board);
+      const items = this._cards();
       const r = this.vp.getBoundingClientRect();
       if (!items.length) { this.view = { x: 0, y: 0, z: this.mode === 'panel' ? 0.7 : 1 }; this._applyView(); this._saveView(); return; }
       let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
@@ -336,8 +352,17 @@
     // ---------- rendering ----------
     _renderItems() {
       const live = YVN.liveItems(this.board);
+      this._colIds = new Set(live.filter((i) => i.type === 'column').map((i) => i.id));
+      if (!this.svg) {
+        this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        this.svg.setAttribute('class', 'yb-lines');
+        this.lbls = el('div', { class: 'yb-llabels' });
+      }
+      if (this.layer.firstChild !== this.svg) this.layer.prepend(this.svg, this.lbls);
       const keep = new Set();
+      const kids = new Map();
       for (const it of live) {
+        if (it.type === 'line') { keep.add(it.id); continue; }
         keep.add(it.id);
         let e = this.els.get(it.id);
         const s = it.type === 'board' ? this.sums[it.boardId] || {} : {};
@@ -349,10 +374,36 @@
           this.els.set(it.id, fresh); e = fresh;
         }
         e._item = it;
-        if (!e.classList.contains('yb-dragging')) { e.style.left = it.x + 'px'; e.style.top = it.y + 'px'; }
+        if (this._inCol(it)) {
+          if (!kids.has(it.col)) kids.set(it.col, []);
+          kids.get(it.col).push(it);
+          continue;
+        }
+        if (e.classList.contains('yb-dragging')) continue;
+        e.classList.remove('yb-incol');
+        if (e.parentElement !== this.layer) this.layer.append(e);
+        e.style.left = it.x + 'px'; e.style.top = it.y + 'px';
         e.style.width = (it.w || YVN.CARD_W[it.type] || 240) + 'px';
       }
+      // cards stacked inside columns, in column order
+      for (const cid of this._colIds) {
+        const ce = this.els.get(cid);
+        const body = ce && ce.querySelector('.yb-colbody');
+        if (!body) continue;
+        const list = (kids.get(cid) || []).sort((a, b) => (a.ord ?? 1e9) - (b.ord ?? 1e9) || (a.createdAt || 0) - (b.createdAt || 0));
+        for (const k of list) {
+          const e = this.els.get(k.id);
+          if (!e || e.classList.contains('yb-dragging')) continue;
+          e.classList.add('yb-incol');
+          e.style.left = ''; e.style.top = ''; e.style.width = '';
+          body.appendChild(e);
+        }
+        body.classList.toggle('yb-colempty', !list.length);
+        const cnt = ce.querySelector('.yb-colcount');
+        if (cnt) cnt.textContent = list.length ? String(list.length) : '';
+      }
       for (const [id, e] of this.els) if (!keep.has(id)) { e.remove(); this.els.delete(id); this.sel.delete(id); }
+      for (const id of [...this.sel]) if (!keep.has(id)) this.sel.delete(id);
       this._paintSel();
       const msg = this.boardId === HOME
         ? '這裡是首頁。按「Board」建立第一個 Board，例如「DaVinci 調色」。'
@@ -360,7 +411,10 @@
       this.empty.textContent = msg;
       this.empty.hidden = live.length > 0;
     }
-    _paintSel() { for (const [id, e] of this.els) e.classList.toggle('yb-sel', this.sel.has(id)); }
+    _paintSel() {
+      for (const [id, e] of this.els) e.classList.toggle('yb-sel', this.sel.has(id));
+      this._renderLines();
+    }
 
     _card(it) {
       const c = el('div', { class: `yb-item yb-${it.type}`, dataset: { id: it.id } });
@@ -387,6 +441,16 @@
         c.append(el('div', { class: 'yb-bicon', style: `background:${s.color || '#8b8d98'}` }, el('i'), el('i'), el('i'), el('i')),
           el('div', { class: 'yb-btitle' }, s.title || (s.id ? '未命名' : '同步中…')),
           el('div', { class: 'yb-bcount' }, s.itemCount != null ? `${s.itemCount} 張卡片` : ''));
+      } else if (it.type === 'column') {
+        c.append(el('div', { class: 'yb-colhead', title: '雙擊改標題；拖曳這裡移動整欄' },
+          el('span', { class: 'yb-coltitle' + (it.title ? '' : ' yb-ph') }, it.title || '未命名欄'),
+          el('small', { class: 'yb-colcount' }, '')),
+        el('div', { class: 'yb-colbody' }));
+      } else if (it.type === 'color') {
+        c.append(el('div', { class: 'yb-swatch', style: `background:${it.hex || '#8b8d98'}` }),
+          el('div', { class: 'yb-swfoot' },
+            el('b', { class: it.name ? '' : 'yb-ph' }, it.name || '未命名顏色'),
+            el('button', { class: 'yb-hex', dataset: { act: 'copyhex' }, title: '複製色碼' }, (it.hex || '').toUpperCase())));
       } else if (it.type === 'link') {
         const vid = ytId(it.url);
         if (vid) c.append(el('div', { class: 'yb-imgwrap yb-yt', title: '雙擊開啟影片' }, el('img', { src: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`, alt: '', draggable: 'false' }), el('span', { class: 'yb-playbadge' }, icon('play', 18))));
@@ -420,8 +484,11 @@
       const vp = this.vp;
       vp.addEventListener('pointerdown', (e) => this._down(e));
       vp.addEventListener('dblclick', (e) => this._dbl(e));
+      vp.addEventListener('input', () => this._renderLines());
       vp.addEventListener('click', (e) => this._click(e));
       vp.addEventListener('contextmenu', (e) => {
+        const ln = e.target.closest('.yb-line, .yb-llabel');
+        if (ln) { e.preventDefault(); this.sel = new Set([ln.dataset.id]); this._paintSel(); return this._lineMenu(ln.dataset.id, { x: e.clientX, y: e.clientY }); }
         const c = e.target.closest('.yb-item');
         if (!c || e.target.closest('textarea,input')) return;
         e.preventDefault();
@@ -474,9 +541,23 @@
       if (!this.menu.hidden) this._closeMenu();
       const card = t.closest('.yb-item');
       if (this.editing && (!card || card.dataset.id !== this.editing)) this.commitEdit();
-      if (t.closest('[data-act], a, .yb-md input')) return;
       const start = { x: e.clientX, y: e.clientY };
-      if (card && e.button === 0) {
+      if (e.button === 0 && this._lineMode) {
+        e.preventDefault();
+        this.gesture = { kind: 'line-new', start, from: this._pendingFrom || this._endAt(e, null) };
+        this._pendingFrom = null;
+      } else if (e.button === 0 && t.closest('.yb-hnd')) {
+        const h = t.closest('.yb-hnd');
+        this.gesture = { kind: 'line-end', start, id: h.dataset.line, end: h.dataset.end };
+      } else if (t.closest('.yb-line, .yb-llabel')) {
+        const id = t.closest('.yb-line, .yb-llabel').dataset.id;
+        if (e.shiftKey || e.ctrlKey || e.metaKey) { this.sel.has(id) ? this.sel.delete(id) : this.sel.add(id); } else this.sel = new Set([id]);
+        this._paintSel();
+        return;
+      }
+      if (this.gesture && /^line/.test(this.gesture.kind)) { /* handled by the window listeners below */ }
+      else if (t.closest('[data-act], a, .yb-md input')) return;
+      else if (card && e.button === 0) {
         const id = card.dataset.id;
         if (t.classList.contains('yb-rs')) {
           this.gesture = { kind: 'resize', id, start, w: card.offsetWidth / 1, el: card };
@@ -484,9 +565,19 @@
           if (e.shiftKey || e.ctrlKey || e.metaKey) { this.sel.has(id) ? this.sel.delete(id) : this.sel.add(id); }
           else if (!this.sel.has(id)) this.sel = new Set([id]);
           this._paintSel();
-          const orig = new Map();
-          for (const sid of this.sel) { const it = this.board.items.find((i) => i.id === sid); if (it) orig.set(sid, { x: it.x, y: it.y }); }
-          this.gesture = { kind: 'drag', id, start, orig, moved: false };
+          const orig = new Map(), lines = [];
+          for (const sid of this.sel) {
+            const it = this.board.items.find((i) => i.id === sid);
+            if (!it || it.deleted) continue;
+            if (it.type === 'line') { lines.push(it); continue; }
+            const ce = this.els.get(sid);
+            const inCol = this._inCol(it) && ce && ce.isConnected;
+            const r = inCol ? this._layerRect(ce) : { x: it.x, y: it.y };
+            orig.set(sid, { x: r.x, y: r.y, inCol, w: ce ? ce.offsetWidth : 0 });
+          }
+          // a card inside a selected column moves with the column
+          for (const [sid] of orig) { const it = this.board.items.find((i) => i.id === sid); if (it && it.col && orig.has(it.col)) orig.delete(sid); }
+          this.gesture = { kind: 'drag', id, start, orig, lines, moved: false };
         }
       } else if (e.shiftKey && e.button === 0) {
         this.gesture = { kind: 'marquee', start, base: new Set(this.sel) };
@@ -515,17 +606,35 @@
       if (gst.kind === 'pan') {
         if (Math.abs(dx) + Math.abs(dy) > 3) gst.moved = true;
         this.view.x = gst.vx + dx; this.view.y = gst.vy + dy; this._applyView();
+      } else if (gst.kind === 'line-new' || gst.kind === 'line-end') {
+        gst.pt = this._toBoard(e.clientX, e.clientY);
+        gst.moved = gst.moved || Math.abs(dx) + Math.abs(dy) > 4;
+        this._renderLines();
       } else if (gst.kind === 'drag') {
         if (!gst.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
-        if (!gst.moved) { gst.moved = true; for (const id of gst.orig.keys()) { const c = this.els.get(id); if (c) { c.classList.add('yb-dragging'); this.layer.append(c); } } }
+        if (!gst.moved) {
+          gst.moved = true;
+          for (const [id, o] of gst.orig) {
+            const c = this.els.get(id);
+            if (!c) continue;
+            if (o.inCol) { c.classList.remove('yb-incol'); c.style.width = o.w + 'px'; }
+            c.classList.add('yb-dragging'); this.layer.append(c);
+          }
+        }
         for (const [id, o] of gst.orig) { const c = this.els.get(id); if (c) { c.style.left = o.x + dx / this.view.z + 'px'; c.style.top = o.y + dy / this.view.z + 'px'; } }
         const under = document.elementFromPoint(e.clientX, e.clientY);
         const target = under && under.closest('.yb-board');
         const tid = target && !gst.orig.has(target.dataset.id) ? target : null;
         if (gst.drop !== tid) { if (gst.drop) gst.drop.classList.remove('yb-drop'); if (tid) tid.classList.add('yb-drop'); gst.drop = tid; }
+        // drop into a column (columns cannot be nested)
+        const draggingColumn = [...gst.orig.keys()].some((id) => (this.board.items.find((i) => i.id === id) || {}).type === 'column');
+        const col = !tid && !draggingColumn && under ? under.closest('.yb-column') : null;
+        this._colDropAt(gst, col && !gst.orig.has(col.dataset.id) ? col : null, e.clientY);
         this._edgePan(e);
+        this._renderLines();
       } else if (gst.kind === 'resize') {
         gst.el.style.width = clamp(gst.w + dx / this.view.z, 120, 900) + 'px';
+        this._renderLines();
       } else if (gst.kind === 'marquee') {
         const r = this.vp.getBoundingClientRect();
         const x1 = Math.min(gst.start.x, e.clientX), y1 = Math.min(gst.start.y, e.clientY);
@@ -533,7 +642,7 @@
         this.marquee.hidden = false;
         const a = this._toBoard(x1, y1), b = this._toBoard(Math.max(gst.start.x, e.clientX), Math.max(gst.start.y, e.clientY));
         this.sel = new Set(gst.base);
-        for (const it of YVN.liveItems(this.board)) {
+        for (const it of this._cards()) {
           const q = this._rectOf(it);
           if (q.x < b.x && q.x + q.w > a.x && q.y < b.y && q.y + q.h > a.y) this.sel.add(it.id);
         }
@@ -557,6 +666,24 @@
       if (!gst) return;
       if (gst.kind === 'pan') { if (gst.moved) this._saveView(); return; }
       if (gst.kind === 'marquee') { this.marquee.hidden = true; return; }
+      if (gst.kind === 'line-new') {
+        this._lineMode = false; this.vp.classList.remove('yb-linemode');
+        const to = this._endAt(e, gst.from.id);
+        const far = Math.hypot(to.x - gst.from.x, to.y - gst.from.y) > 12;
+        if ((!gst.from.id && !to.id && !far) || (gst.from.id && to.id === gst.from.id) || (!far && !to.id)) { this._renderLines(); return; }
+        const it = await this.m.putItem(this.boardId, { type: 'line', from: gst.from, to, arrow: 'end', color: null, label: '' });
+        await this.reload();
+        this.sel = new Set([it.id]); this._paintSel();
+        return;
+      }
+      if (gst.kind === 'line-end') {
+        const ln = this.board.items.find((i) => i.id === gst.id);
+        if (!gst.moved || !ln) { this._renderLines(); return; }
+        const other = gst.end === 'from' ? ln.to : ln.from;
+        const pt = this._endAt(e, other && other.id);
+        await this.m.patchItems(this.boardId, [{ id: gst.id, [gst.end]: pt }]);
+        return this.reload();
+      }
       if (gst.kind === 'resize') {
         const w = Math.round(parseFloat(gst.el.style.width));
         await this.m.patchItems(this.boardId, [{ id: gst.id, w }]);
@@ -569,6 +696,8 @@
           const it = this.board.items.find((i) => i.id === gst.id);
           return; // boards open on double-click
         }
+        const colDrop = gst.colDrop;
+        this._colDropAt(gst, null);
         if (gst.drop) {
           const targetId = gst.drop.dataset.id;
           gst.drop.classList.remove('yb-drop');
@@ -576,7 +705,30 @@
           await this._moveInto(ids, tItem.boardId);
           return;
         }
-        const patches = ids.map((id) => { const c = this.els.get(id); return { id, x: snap(parseFloat(c.style.left)), y: snap(parseFloat(c.style.top)) }; });
+        if (colDrop) {
+          // new order inside the column: existing cards with the dragged ones inserted at the drop index
+          const cid = colDrop.col.dataset.id;
+          const existing = YVN.liveItems(this.board).filter((i) => i.col === cid && !gst.orig.has(i.id))
+            .sort((a, b) => (a.ord ?? 1e9) - (b.ord ?? 1e9) || (a.createdAt || 0) - (b.createdAt || 0)).map((i) => i.id);
+          const dragged = ids.slice().sort((a, b) => gst.orig.get(a).y - gst.orig.get(b).y);
+          existing.splice(colDrop.index, 0, ...dragged);
+          await this.m.patchItems(this.boardId, existing.map((id, i) => ({ id, col: cid, ord: i })));
+          return this.reload();
+        }
+        const ddx = (e.clientX - gst.start.x) / this.view.z, ddy = (e.clientY - gst.start.y) / this.view.z;
+        const patches = ids.map((id) => {
+          const c = this.els.get(id), o = gst.orig.get(id);
+          const pch = { id, x: snap(parseFloat(c.style.left)), y: snap(parseFloat(c.style.top)) };
+          if (o.inCol) pch.col = null;
+          return pch;
+        });
+        // free (unattached) line ends that were selected move along
+        for (const ln of gst.lines || []) {
+          const pch = { id: ln.id };
+          if (ln.from && !ln.from.id) pch.from = { x: ln.from.x + ddx, y: ln.from.y + ddy };
+          if (ln.to && !ln.to.id) pch.to = { x: ln.to.x + ddx, y: ln.to.y + ddy };
+          if (pch.from || pch.to) patches.push(pch);
+        }
         await this.m.patchItems(this.boardId, patches);
         return this.reload();
       }
@@ -586,13 +738,20 @@
       const target = await this.api.getBoard(targetBoardId);
       const items = target ? YVN.liveItems(target).slice() : [];
       const positions = {};
-      let after = items.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).pop();
+      let after = items.filter((i) => i.type !== 'line' && !i.col).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).pop();
+      const all = new Set(ids);
+      for (const id of ids) {
+        const it = this.board.items.find((i) => i.id === id);
+        if (it && it.type === 'column') for (const k of YVN.liveItems(this.board)) if (k.col === id) all.add(k.id);
+      }
+      ids = [...all].filter((id) => (this.board.items.find((i) => i.id === id) || {}).type !== 'line');
       for (const id of ids) {
         const it = this.board.items.find((i) => i.id === id);
         if (!it) continue;
+        if (it.col && all.has(it.col)) { positions[id] = { x: it.x, y: it.y }; continue; }
         const s = this._rectOf(it);
         const p = YVN.findSlot(items, s.w, s.h, { after, maxW: 1000 });
-        positions[id] = p;
+        positions[id] = { ...p, col: null };
         const placed = { ...it, ...p };
         items.push(placed); after = placed;
       }
@@ -628,6 +787,11 @@
       switch (act.dataset.act) {
         case 'seek': return this._seek(it.video, it.ts);
         case 'video': return this._seek(it.video, 0);
+        case 'copyhex': {
+          const hex = (it.hex || '').toUpperCase();
+          if (navigator.clipboard) navigator.clipboard.writeText(hex).then(() => this.toast('已複製 ' + hex), () => this.toast(hex));
+          return;
+        }
         case 'comments': {
           const first = (it.comments || [])[0];
           if (!first) return;
@@ -661,7 +825,11 @@
     _dbl(e) {
       const t = e.target;
       if (t.closest('textarea, input, [data-act], .yb-rt')) return;
+      const lineEl = t.closest('.yb-line, .yb-llabel');
+      if (lineEl) return this._editLineLabel(lineEl.dataset.id);
+      if (t.closest('.yb-colhead')) return this._renameColumn(t.closest('.yb-item')._item);
       const card = t.closest('.yb-item');
+      if (card && card._item && card._item.type === 'column') return;
       if (!card) {
         const p = this._toBoard(e.clientX, e.clientY);
         return this._addNote({ x: snap(p.x - 20), y: snap(p.y - 20) });
@@ -674,10 +842,12 @@
         return this.startEdit(it.id);
       }
       if (it.type === 'link') return t.closest('.yb-yt') ? window.open(it.url, '_blank', 'noopener') : this.startEdit(it.id);
+      if (it.type === 'color') return this.startEdit(it.id);
     }
 
     _key(e) {
       if (e.target.closest('textarea, input')) return;
+      if (e.key === 'Escape' && this._lineMode) { this._lineMode = false; this.vp.classList.remove('yb-linemode'); return; }
       if (e.key === 'Escape') { this._closeMenu(); this._closeCpop(); this.trashBox.hidden = true; this.toggleSearch(false); this.sel.clear(); this._paintSel(); return; }
       if ((e.key === 'Delete' || e.key === 'Backspace') && this.sel.size) { e.preventDefault(); this.deleteSelected(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); this.sel = new Set(YVN.liveItems(this.board).map((i) => i.id)); this._paintSel(); return; }
@@ -693,8 +863,13 @@
     }
 
     async deleteSelected() {
-      const ids = [...this.sel];
+      let ids = [...this.sel];
       if (!ids.length) return;
+      const live = YVN.liveItems(this.board);
+      const all = new Set(ids);
+      for (const id of ids) if ((live.find((i) => i.id === id) || {}).type === 'column') for (const k of live) if (k.col === id) all.add(k.id);
+      for (const ln of live) if (ln.type === 'line' && ((ln.from && all.has(ln.from.id)) || (ln.to && all.has(ln.to.id)))) all.add(ln.id);
+      ids = [...all];
       const boards = ids.map((id) => this.board.items.find((i) => i.id === id)).filter((i) => i && i.type === 'board');
       if (boards.length && !confirm(`刪除 ${boards.map((b) => '「' + this._title(b.boardId) + '」').join('、')} 會一併刪除裡面所有卡片，確定嗎？`)) return;
       await this.m.deleteItems(this.boardId, ids);
@@ -705,7 +880,7 @@
     // ---------- menus ----------
     _menuAt(anchor, entries, above) {
       this.menu.replaceChildren(...entries.map((m) => m.colors
-        ? el('div', { class: 'yb-colors' }, ...m.colors.map((c) => el('button', { class: 'yb-color' + (c ? '' : ' yb-nocolor'), title: c || '無顏色', 'aria-label': c || '無顏色', style: c ? `background:${c}` : '', onclick: () => { this._closeMenu(); m.pick(c); } })))
+        ? el('div', { class: 'yb-colors' }, ...m.colors.map((c) => el('button', { class: 'yb-swbtn' + (c ? '' : ' yb-nocolor'), title: c || '無顏色', 'aria-label': c || '無顏色', style: c ? `background:${c}` : '', onclick: () => { this._closeMenu(); m.pick(c); } })))
         : m.sep ? el('hr')
           : el('button', { class: 'yb-mi' + (m.danger ? ' yb-danger' : ''), role: 'menuitem', onclick: () => { this._closeMenu(); m.run(); } }, m.icon ? icon(m.icon, 16) : el('span', { class: 'yb-ic' }), m.label)));
       this.menu.hidden = false;
@@ -730,6 +905,14 @@
         if (it.type === 'shot' || it.type === 'image') entries.push({ label: '開啟標註編輯器', icon: 'image', run: () => this.openEditor(it.id) });
         if (it.type === 'shot' && it.ts != null) entries.push({ label: '跳到影片 ' + YVN.fmtTime(it.ts), icon: 'play', run: () => this._seek(it.video, it.ts) });
         if (it.type === 'link') entries.push({ label: '開啟連結', icon: 'link', run: () => window.open(it.url, '_blank', 'noopener') }, { label: '編輯網址', icon: 'note', run: () => this.startEdit(it.id) });
+        if (it.type === 'column') entries.push({ label: '重新命名欄', icon: 'column', run: () => this._renameColumn(it) });
+        if (it.type === 'color') entries.push({ label: '編輯顏色', icon: 'swatch', run: () => this.startEdit(it.id) });
+        if (this._inCol(it)) entries.push({ label: '移出欄', icon: 'column', run: async () => {
+          const r = this._rectOf(it);
+          await this.m.patchItems(this.boardId, [{ id: it.id, col: null, x: snap(r.x + r.w + 40), y: snap(r.y) }]);
+          this.reload();
+        } });
+        if (it.type !== 'line') entries.push({ label: '從這張卡片拉線', icon: 'line', run: () => this._startLineFrom(it.id) });
       }
       const boardsHere = YVN.liveItems(this.board).filter((x) => x.type === 'board' && !ids.includes(x.id));
       if (boardsHere.length) entries.push({ label: '移到 Board…', icon: 'board', run: () => this._menuAt(anchor, boardsHere.map((b) => ({ label: this._title(b.boardId), icon: 'board', run: () => this._moveInto(ids, b.boardId) }))) });
@@ -767,6 +950,22 @@
         inp.focus();
         return;
       }
+      if (it.type === 'color') {
+        const pick = el('input', { type: 'color', class: 'yb-swpick', 'aria-label': '選擇顏色' });
+        pick.value = /^#[0-9a-f]{6}$/i.test(it.hex || '') ? it.hex : '#8b8d98';
+        const hex = el('input', { class: 'yb-input', value: (it.hex || '').toUpperCase(), placeholder: '#RRGGBB', spellcheck: 'false' });
+        const name = el('input', { class: 'yb-input', value: it.name || '', placeholder: '顏色名稱，例如：膚色高光' });
+        const sw = c.querySelector('.yb-swatch');
+        pick.addEventListener('input', () => { hex.value = pick.value.toUpperCase(); sw.style.background = pick.value; });
+        hex.addEventListener('input', () => { const v = hex.value.trim(); if (/^#?[0-9a-f]{6}$/i.test(v)) { const h = v[0] === '#' ? v : '#' + v; pick.value = h; sw.style.background = h; } });
+        const box = el('div', { class: 'yb-editbox yb-swedit' }, el('div', { class: 'yb-swrow' }, pick, hex), name);
+        c.querySelector('.yb-swfoot').replaceWith(box);
+        for (const inp of [hex, name, pick]) inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); this.commitEdit(); } });
+        box.addEventListener('focusout', () => setTimeout(() => { if (this.editing === id && !box.contains(document.activeElement)) this.commitEdit(); }, 200));
+        this._edit = { it, get: () => ({ hex: pick.value, name: name.value.trim() }), field: 'swatch' };
+        name.focus();
+        return;
+      }
       const comments = new Map((it.comments || []).map((cm) => [cm.id, { ...cm }]));
       const ed = new YVN.RichEditor(it.text || '', {
         placeholder: it.type === 'note' ? (it.video ? '整部影片的重點、結論…' : '輸入文字…（選取文字可設定格式）') : '截圖說明…',
@@ -801,6 +1000,12 @@
       if (c) c.classList.remove('yb-editing');
       const val = ed.get();
       const it = ed.it;
+      if (ed.field === 'swatch') {
+        if (val.hex !== it.hex || val.name !== (it.name || '')) await this.m.putItem(this.boardId, { id, hex: val.hex, name: val.name });
+        this._fresh = null;
+        if (c) c._sig = null;
+        return this.reload();
+      }
       if (it.type === 'note' && !val.trim() && this._fresh === id) {
         await this.m.deleteItems(this.boardId, [id]);
       } else if (it.type === 'link' && !val) {
@@ -944,7 +1149,7 @@
     async openTrash() {
       this._closeMenu();
       const list = await this.api.trash();
-      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結' };
+      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票' };
       const rows = list.map((t) => {
         const it = t.item;
         const text = String(it.type === 'board' ? t.boardRefTitle || '' : YVN.itemText(it)).replace(/\s+/g, ' ');
@@ -1007,12 +1212,12 @@
 
     // ---------- creating cards ----------
     _after() {
-      return YVN.liveItems(this.board).slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).pop() || null;
+      return this._cards().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).pop() || null;
     }
     _slot(w, h, at) {
       if (at) return at;
       const v = this._visible();
-      const items = YVN.liveItems(this.board);
+      const items = this._cards();
       const after = this._after();
       const maxW = Math.max(w + 20, Math.min(v.w - 40, 1400));
       const left = items.length ? Math.min(...items.map((i) => i.x)) : snap(v.x + 30);
@@ -1032,6 +1237,13 @@
       if (act === 'todo') return this._addNote({ text: '**待辦**\n- [ ] ', w: 240 });
       if (act === 'board') return this._addBoard();
       if (act === 'link') return this._addLink('');
+      if (act === 'column') return this._addColumn();
+      if (act === 'color') return this._addColor();
+      if (act === 'line') {
+        this._lineMode = true; this.vp.classList.add('yb-linemode');
+        this.toast('從一張卡片（或空白處）拖曳到另一張卡片即可連線，Esc 取消');
+        return;
+      }
       if (act === 'upload') return this.fileInput.click();
     }
 
@@ -1125,6 +1337,171 @@
           if (this.boardId === boardId) this.reload();
         },
       });
+    }
+
+    // ---------- columns ----------
+    async _addColumn() {
+      const p = this._slot(YVN.CARD_W.column, 200);
+      const it = await this.m.putItem(this.boardId, { type: 'column', title: '', w: YVN.CARD_W.column, ...p });
+      await this.reload();
+      this.focusItem(it.id, false);
+      this._renameColumn(it);
+    }
+    _renameColumn(it) {
+      const c = it && this.els.get(it.id);
+      const t = c && c.querySelector('.yb-coltitle');
+      if (!t) return;
+      const inp = el('input', { class: 'yb-input yb-rename', value: it.title || '', placeholder: '欄的標題' });
+      t.replaceWith(inp);
+      inp.focus(); inp.select();
+      let done = false;
+      const finish = async (save) => {
+        if (done) return; done = true;
+        const v = inp.value.trim();
+        if (save && v !== (it.title || '')) await this.m.patchItems(this.boardId, [{ id: it.id, title: v }]);
+        c._sig = null;
+        this.reload();
+      };
+      inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+      inp.addEventListener('blur', () => finish(true));
+      inp.addEventListener('pointerdown', (e) => e.stopPropagation());
+    }
+    /** Show where dragged cards will land inside a column. */
+    _colDropAt(gst, col, clientY) {
+      if (!this.colIns) this.colIns = el('div', { class: 'yb-colins' });
+      if (gst.colDrop && gst.colDrop.col !== col) gst.colDrop.col.classList.remove('yb-coldrop');
+      if (!col) { gst.colDrop = null; this.colIns.remove(); return; }
+      const body = col.querySelector('.yb-colbody');
+      const kids = [...body.children].filter((k) => k.classList.contains('yb-item') && !k.classList.contains('yb-dragging'));
+      let index = kids.findIndex((k) => { const r = k.getBoundingClientRect(); return clientY < r.top + r.height / 2; });
+      if (index < 0) index = kids.length;
+      if (kids[index]) body.insertBefore(this.colIns, kids[index]); else body.appendChild(this.colIns);
+      col.classList.add('yb-coldrop');
+      gst.colDrop = { col, index };
+    }
+
+    // ---------- color swatches ----------
+    async _addColor() {
+      const palette = ['#e5484d', '#f76b15', '#f5a524', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f'];
+      const p = this._slot(YVN.CARD_W.color, 160);
+      const it = await this.m.putItem(this.boardId, { type: 'color', hex: palette[Math.floor(Math.random() * palette.length)], name: '', w: YVN.CARD_W.color, ...p });
+      await this.reload();
+      this.focusItem(it.id, false);
+      this._fresh = it.id;
+      this.startEdit(it.id);
+    }
+
+    // ---------- lines ----------
+    /** Line end under the pointer: attached to a card (not `exceptId`) or a free point. */
+    _endAt(e, exceptId) {
+      const pt = this._toBoard(e.clientX, e.clientY);
+      const hit = document.elementFromPoint(e.clientX, e.clientY);
+      const card = hit && hit.closest && hit.closest('.yb-item');
+      if (card && this.layer.contains(card) && card.dataset.id !== exceptId && !card.classList.contains('yb-dragging')) {
+        const r = this._layerRect(card);
+        return { id: card.dataset.id, x: Math.round(r.x + r.w / 2), y: Math.round(r.y + r.h / 2) };
+      }
+      return { x: Math.round(pt.x), y: Math.round(pt.y) };
+    }
+    _startLineFrom(id) {
+      const c = this.els.get(id);
+      if (!c) return;
+      this._lineMode = true; this.vp.classList.add('yb-linemode');
+      const r = this._layerRect(c);
+      this._pendingFrom = { id, x: Math.round(r.x + r.w / 2), y: Math.round(r.y + r.h / 2) };
+      this.toast('點一下或拖曳到另一張卡片完成連線，Esc 取消');
+    }
+    /** Resolve a stored end ({id?, x, y}) to a point or a card box. */
+    _endBox(end) {
+      if (!end) return { x: 0, y: 0 };
+      if (end.id) {
+        const c = this.els.get(end.id);
+        if (c && c.isConnected) return { rect: this._layerRect(c) };
+      }
+      return { x: end.x, y: end.y };
+    }
+    _clip(box, toward) {
+      if (!box.rect) return { x: box.x, y: box.y };
+      const r = box.rect, cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      const dx = toward.x - cx, dy = toward.y - cy;
+      if (!dx && !dy) return { x: cx, y: cy };
+      const pad = 6;
+      const t = Math.min(dx ? (r.w / 2 + pad) / Math.abs(dx) : Infinity, dy ? (r.h / 2 + pad) / Math.abs(dy) : Infinity);
+      return { x: cx + dx * Math.min(t, 1), y: cy + dy * Math.min(t, 1) };
+    }
+    _center(box) { return box.rect ? { x: box.rect.x + box.rect.w / 2, y: box.rect.y + box.rect.h / 2 } : { x: box.x, y: box.y }; }
+    _renderLines() {
+      if (!this.svg || !this.board) return;
+      const NS = 'http://www.w3.org/2000/svg';
+      const mk = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
+      this.svg.replaceChildren();
+      this.lbls.replaceChildren();
+      const gst = this.gesture;
+      const arrow = (g, tip, from, color) => {
+        const ang = Math.atan2(tip.y - from.y, tip.x - from.x), L = 13, W = 6.5;
+        const bx = tip.x - Math.cos(ang) * L, by = tip.y - Math.sin(ang) * L;
+        const px = -Math.sin(ang) * W, py = Math.cos(ang) * W;
+        g.append(mk('path', { d: `M${tip.x},${tip.y} L${bx + px},${by + py} L${bx - px},${by - py} Z`, class: 'yb-arrow', style: `fill:${color}` }));
+      };
+      const draw = (ln, A, B, selected, preview) => {
+        const pa = this._clip(A, this._center(B)), pb = this._clip(B, this._center(A));
+        const color = ln.color || 'var(--yb-linec)';
+        const g = mk('g', { class: 'yb-line' + (selected ? ' yb-lsel' : '') + (preview ? ' yb-lprev' : ''), 'data-id': ln.id || '' });
+        const d = `M${pa.x},${pa.y} L${pb.x},${pb.y}`;
+        if (!preview) g.append(mk('path', { d, class: 'yb-hit' }));
+        g.append(mk('path', { d, class: 'yb-vis', style: `stroke:${color}` }));
+        if (ln.arrow === 'end' || ln.arrow === 'both') arrow(g, pb, pa, color);
+        if (ln.arrow === 'both') arrow(g, pa, pb, color);
+        if (selected && !preview) {
+          g.append(mk('circle', { cx: pa.x, cy: pa.y, r: 6, class: 'yb-hnd', 'data-line': ln.id, 'data-end': 'from' }));
+          g.append(mk('circle', { cx: pb.x, cy: pb.y, r: 6, class: 'yb-hnd', 'data-line': ln.id, 'data-end': 'to' }));
+        }
+        this.svg.append(g);
+        if (ln.label && !preview) {
+          this.lbls.append(el('div', { class: 'yb-llabel' + (selected ? ' yb-lsel' : ''), dataset: { id: ln.id }, style: `left:${(pa.x + pb.x) / 2}px;top:${(pa.y + pb.y) / 2}px` }, ln.label));
+        }
+      };
+      for (const ln of YVN.liveItems(this.board)) {
+        if (ln.type !== 'line') continue;
+        let A = this._endBox(ln.from), B = this._endBox(ln.to);
+        if (gst && gst.kind === 'line-end' && gst.id === ln.id && gst.pt) { if (gst.end === 'from') A = gst.pt; else B = gst.pt; }
+        draw(ln, A, B, this.sel.has(ln.id));
+      }
+      if (gst && gst.kind === 'line-new' && gst.pt) draw({ arrow: 'end' }, this._endBox(gst.from), gst.pt, false, true);
+    }
+    _lineMenu(id, anchor) {
+      const ln = this.board.items.find((i) => i.id === id);
+      if (!ln) return;
+      const set = async (patch) => { await this.m.patchItems(this.boardId, [{ id, ...patch }]); this.reload(); };
+      this._menuAt(anchor, [
+        { label: ln.label ? '編輯文字' : '加上文字', icon: 'note', run: () => this._editLineLabel(id) },
+        { label: '單向箭頭 →', icon: 'line', run: () => set({ arrow: 'end' }) },
+        { label: '雙向箭頭 ↔', icon: 'line', run: () => set({ arrow: 'both' }) },
+        { label: '無箭頭 —', icon: 'line', run: () => set({ arrow: 'none' }) },
+        { label: '反轉方向', icon: 'redo', run: () => set({ from: ln.to, to: ln.from }) },
+        { colors: [null, ...YVN.BOARD_COLORS], pick: (c) => set({ color: c }) },
+        { sep: true },
+        { label: '刪除連線', danger: true, run: async () => { await this.m.deleteItems(this.boardId, [id]); this.sel.delete(id); this.reload(); } },
+      ]);
+    }
+    _editLineLabel(id) {
+      const ln = this.board.items.find((i) => i.id === id);
+      if (!ln) return;
+      const A = this._endBox(ln.from), B = this._endBox(ln.to);
+      const pa = this._clip(A, this._center(B)), pb = this._clip(B, this._center(A));
+      const inp = el('input', { class: 'yb-input yb-lblinput', value: ln.label || '', placeholder: '連線文字', style: `left:${(pa.x + pb.x) / 2}px;top:${(pa.y + pb.y) / 2}px` });
+      this.layer.append(inp);
+      inp.focus(); inp.select();
+      let done = false;
+      const finish = async (save) => {
+        if (done) return; done = true;
+        inp.remove();
+        const v = inp.value.trim();
+        if (save && v !== (ln.label || '')) { await this.m.patchItems(this.boardId, [{ id, label: v }]); this.reload(); }
+      };
+      inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+      inp.addEventListener('blur', () => finish(true));
+      inp.addEventListener('pointerdown', (e) => e.stopPropagation());
     }
 
     destroy() { if (this._unsub) this._unsub(); }

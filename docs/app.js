@@ -155,6 +155,8 @@
         lines.push('');
       } else if (it.type === 'link') lines.push(`- [${it.title || it.url}](${it.url})`, '');
       else if (it.type === 'board') lines.push(`- 📁 [[${(sums[it.boardId] || {}).title || '未命名'}]]`, '');
+      else if (it.type === 'column') lines.push(`## ${it.title || '欄'}`, '');
+      else if (it.type === 'color') lines.push(`- 色票 ${it.name || ''} \`${(it.hex || '').toUpperCase()}\``, '');
     }
     files.unshift({ name: 'board.md', data: lines.join('\n') });
     const zip = await YVN.makeZip(files);
