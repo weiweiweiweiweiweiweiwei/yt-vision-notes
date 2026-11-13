@@ -94,12 +94,13 @@
 .yb-cbar + .yb-imgwrap { border-radius: 0; }
 .yb-imgwrap img { display: block; width: 100%; height: 100%; object-fit: contain; color: #aaa; font-size: 11px; }
 .yb-image .yb-imgwrap { border-radius: 5px; }
-.yb-image:has(.yb-foot .yb-md) .yb-imgwrap { border-radius: 5px 5px 0 0; }
+.yb-image:has(.yb-cap) .yb-imgwrap { border-radius: 5px 5px 0 0; }
 .yb-edited { position: absolute; right: 6px; bottom: 6px; padding: 0 5px; border-radius: 4px; background: rgba(0, 0, 0, .65); color: #fff; font-size: 11px; }
-.yb-foot { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; min-height: 34px; }
-.yb-image .yb-foot:not(:has(.yb-md)) { display: none; }
-.yb-foot .yb-md { flex: 1; min-width: 0; font-size: 13px; }
-.yb-foot .yb-ta { flex: 1; padding: 0; }
+.yb-foot { display: flex; align-items: center; gap: 8px; padding: 6px 8px 0; min-height: 28px; }
+.yb-foot:last-child { padding-bottom: 6px; min-height: 34px; }
+.yb-cap { padding: 6px 8px 8px; }
+.yb-cap .yb-md { font-size: 13px; }
+.yb-ta.yb-capta { padding: 6px 8px 8px; font-size: 13px; min-height: 36px; }
 .yb-capph { font-size: 12px; line-height: 22px; }
 .yb-item:not(:hover):not(.yb-sel) .yb-capph { visibility: hidden; }
 .yb-ts { flex: none; height: 22px; padding: 0 7px; border: 0; border-radius: 5px; background: var(--yb-accent); color: #fff !important; font-size: 12px !important; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -148,7 +149,7 @@
 
 /* menu, search, toast */
 .yb-menu { position: absolute; z-index: 30; min-width: 190px; max-width: 280px; padding: 4px; border: 1px solid var(--yb-line); border-radius: 10px; background: var(--yb-card); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); }
-.yb-mi { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: none; text-align: left; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yb-mi { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--yb-fg) !important; text-align: left; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .yb-mi .yb-ic { width: 16px; color: var(--yb-fg2); }
 .yb-mi:hover { background: var(--yb-raised); }
 .yb-danger { color: #e5484d !important; }

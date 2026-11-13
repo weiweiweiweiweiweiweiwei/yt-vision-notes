@@ -341,11 +341,14 @@
         if (it.image && it.image.edits) wrap.append(el('span', { class: 'yb-edited', title: '已標註／裁切' }, '✎'));
         c.append(wrap);
         this._loadImg(it, img);
-        const foot = el('div', { class: 'yb-foot' });
-        if (it.type === 'shot' && it.ts != null) foot.append(el('button', { class: 'yb-ts', dataset: { act: 'seek' }, title: it.video ? `跳到 ${it.video.title} 的這個時間點` : '跳到這個時間點' }, YVN.fmtTime(it.ts)));
-        if (it.text) foot.append(this._md(it.text));
-        else foot.append(el('span', { class: 'yb-ph yb-capph' }, '雙擊加說明'));
-        c.append(foot);
+        // timestamp row, then the caption as a full-width block below it
+        if (it.type === 'shot') {
+          const foot = el('div', { class: 'yb-foot' });
+          if (it.ts != null) foot.append(el('button', { class: 'yb-ts', dataset: { act: 'seek' }, title: it.video ? `跳到 ${it.video.title} 的這個時間點` : '跳到這個時間點' }, YVN.fmtTime(it.ts)));
+          if (!it.text) foot.append(el('span', { class: 'yb-ph yb-capph' }, '雙擊加說明'));
+          c.append(foot);
+        }
+        if (it.text) c.append(el('div', { class: 'yb-cap' }, this._md(it.text)));
       } else if (it.type === 'board') {
         const s = this.sums[it.boardId] || {};
         c.append(el('div', { class: 'yb-bicon', style: `background:${s.color || '#8b8d98'}` }, el('i'), el('i'), el('i'), el('i')),
@@ -521,8 +524,7 @@
         for (const id of ids) { const c = this.els.get(id); if (c) c.classList.remove('yb-dragging'); }
         if (!gst.moved) {
           const it = this.board.items.find((i) => i.id === gst.id);
-          if (it && it.type === 'board' && !(e.shiftKey || e.ctrlKey || e.metaKey)) this.open(it.boardId);
-          return;
+          return; // boards open on double-click
         }
         if (gst.drop) {
           const targetId = gst.drop.dataset.id;
@@ -608,6 +610,7 @@
         return this._addNote({ x: snap(p.x - 20), y: snap(p.y - 20) });
       }
       const it = card._item;
+      if (it.type === 'board') return this.open(it.boardId);
       if (it.type === 'note') return this.startEdit(it.id);
       if (it.type === 'shot' || it.type === 'image') {
         if (t.closest('.yb-imgwrap')) return this.openEditor(it.id);
@@ -714,8 +717,13 @@
         if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); this.commitEdit(); }
       });
       ta.addEventListener('blur', () => setTimeout(() => { if (this.editing === id && document.activeElement !== ta) this.commitEdit(); }, 120));
-      const target = it.type === 'note' ? c.querySelector('.yb-md') : c.querySelector('.yb-foot .yb-md, .yb-foot .yb-capph');
-      if (target) target.replaceWith(ta); else c.append(ta);
+      if (it.type === 'note') c.querySelector('.yb-md').replaceWith(ta);
+      else {
+        ta.classList.add('yb-capta');
+        const cap = c.querySelector('.yb-cap'), ph = c.querySelector('.yb-capph'), foot = c.querySelector('.yb-foot');
+        if (ph) ph.remove();
+        if (cap) cap.replaceWith(ta); else if (foot) foot.after(ta); else c.append(ta);
+      }
       this._edit = { it, get: () => ta.value, field: 'text' };
       grow(); ta.focus();
       ta.selectionStart = ta.selectionEnd = ta.value.length;
