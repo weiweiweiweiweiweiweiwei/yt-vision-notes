@@ -8,7 +8,7 @@
   "permissions": ["identity", "storage", "unlimitedStorage", "alarms"],
   "host_permissions": ["https://www.googleapis.com/*"],
   "oauth2": {
-    "client_id": "YOUR_CHROME_EXTENSION_CLIENT_ID.apps.googleusercontent.com",
+    "client_id": "1076400748035-5t6h8qv1sm21vp79o8tdii3uinemj383.apps.googleusercontent.com",
     "scopes": ["https://www.googleapis.com/auth/drive.file"]
   },
   "background": { "service_worker": "background.js" },
