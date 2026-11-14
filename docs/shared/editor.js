@@ -20,14 +20,14 @@
 
   const COLORS = ['#ff3b30', '#ff9f0a', '#ffd60a', '#30d158', '#0a84ff', '#bf5af2', '#ffffff', '#111111'];
   const TOOLS = [
-    ['pan', '✋', '平移 / 檢視 (V)'],
-    ['pen', '✏️', '畫筆 (P)'],
-    ['hl', '🖍️', '螢光筆 (H)'],
-    ['arrow', '↗', '箭頭 (A)'],
-    ['rect', '▭', '矩形 (R)'],
-    ['ellipse', '◯', '圓形 (E)'],
-    ['text', 'T', '文字 (T，或直接雙擊圖片)'],
-    ['crop', '⛶', '裁切 (C)'],
+    ['pan', '✋', 'Pan / view (V)'],
+    ['pen', '✏️', 'Pen (P)'],
+    ['hl', '🖍️', 'Highlighter (H)'],
+    ['arrow', '↗', 'Arrow (A)'],
+    ['rect', '▭', 'Rectangle (R)'],
+    ['ellipse', '◯', 'Ellipse (E)'],
+    ['text', 'T', 'Text (T, or double-click the image)'],
+    ['crop', '⛶', 'Crop (C)'],
   ];
   const KEY_TOOL = { v: 'pan', p: 'pen', h: 'hl', a: 'arrow', r: 'rect', e: 'ellipse', t: 'text', c: 'crop' };
 
@@ -116,27 +116,27 @@
         <div class="yvne-tools"></div>
         <div class="yvne-sep"></div>
         <div class="yvne-colors"></div>
-        <label class="yvne-size" title="粗細"><input type="range" min="1" max="10" value="3"></label>
+        <label class="yvne-size" title="Size"><input type="range" min="1" max="10" value="3"></label>
         <div class="yvne-sep"></div>
-        <button class="yvne-btn" data-act="undo" title="復原 (Ctrl+Z)">↶</button>
-        <button class="yvne-btn" data-act="redo" title="重做 (Ctrl+Y)">↷</button>
-        <button class="yvne-btn" data-act="clear" title="清除全部：還原為原始未裁切/未標註底圖">Clear All</button>
+        <button class="yvne-btn" data-act="undo" title="Undo (Ctrl+Z)">↶</button>
+        <button class="yvne-btn" data-act="redo" title="Redo (Ctrl+Y)">↷</button>
+        <button class="yvne-btn" data-act="clear" title="Clear all: back to the original uncropped, unannotated image">Clear All</button>
         <div class="yvne-grow"></div>
-        <button class="yvne-btn yvne-ts" data-act="seek" title="跳到此時間點"></button>
+        <button class="yvne-btn yvne-ts" data-act="seek" title="Jump to this moment"></button>
         <span class="yvne-count"></span>
-        <button class="yvne-btn" data-act="fit" title="符合視窗 (0)">⤢</button>
-        <button class="yvne-btn" data-act="download" title="下載目前圖片">⬇</button>
-        <button class="yvne-btn yvne-primary" data-act="save">儲存修改</button>
-        <button class="yvne-btn" data-act="close" title="關閉 (Esc)">✕</button>
+        <button class="yvne-btn" data-act="fit" title="Fit to window (0)">⤢</button>
+        <button class="yvne-btn" data-act="download" title="Download this image">⬇</button>
+        <button class="yvne-btn yvne-primary" data-act="save">Save changes</button>
+        <button class="yvne-btn" data-act="close" title="Close (Esc)">✕</button>
       </div>
       <div class="yvne-stage">
         <canvas></canvas>
-        <button class="yvne-nav yvne-prev" data-act="prev" title="上一張 (←)">‹</button>
-        <button class="yvne-nav yvne-next" data-act="next" title="下一張 (→)">›</button>
+        <button class="yvne-nav yvne-prev" data-act="prev" title="Previous (←)">‹</button>
+        <button class="yvne-nav yvne-next" data-act="next" title="Next (→)">›</button>
         <div class="yvne-cropbar" hidden>
-          <span>拖曳框選要保留的區域</span>
-          <button class="yvne-btn yvne-primary" data-act="crop-apply">套用裁切 (Enter)</button>
-          <button class="yvne-btn" data-act="crop-reset">取消裁切</button>
+          <span>Drag to select the area to keep</span>
+          <button class="yvne-btn yvne-primary" data-act="crop-apply">Apply crop (Enter)</button>
+          <button class="yvne-btn" data-act="crop-reset">Cancel crop</button>
         </div>
         <div class="yvne-msg" hidden></div>
       </div>
@@ -234,7 +234,7 @@
       $('[data-act=redo]').disabled = !s.redo.length;
       const anyDirty = st.some((x) => x.dirty);
       const saveBtn = $('[data-act=save]');
-      saveBtn.disabled = !anyDirty; saveBtn.textContent = anyDirty ? '儲存修改 ●' : '儲存修改';
+      saveBtn.disabled = !anyDirty; saveBtn.textContent = anyDirty ? 'Save changes ●' : 'Save changes';
       $('.yvne-ts').textContent = '⏱ ' + YVN.fmtTime(images[idx].ts);
       $('.yvne-ts').style.visibility = images[idx].ts == null ? 'hidden' : '';
       $('.yvne-count').textContent = `${idx + 1} / ${images.length}`;
@@ -269,7 +269,7 @@
       const s = cur();
       refreshUI();
       if (!s.img) {
-        say('載入中…'); draw();
+        say('Loading…'); draw();
         try {
           if (!s.url) {
             const src = await images[idx].load();
@@ -280,7 +280,7 @@
           s.img = await loadImage(s.url);
           const th = stripEl.children[idx];
           if (th) th.style.backgroundImage = `url("${s.url}")`;
-        } catch (e) { say('圖片載入失敗（尚未同步或離線）'); return; }
+        } catch (e) { say('Image failed to load (not synced yet, or offline)'); return; }
       }
       if (closed || s !== cur()) return;
       say(''); resize(); fit(); refreshUI();
@@ -302,7 +302,7 @@
       commitText();
       const r = stage.getBoundingClientRect();
       const ta = document.createElement('textarea');
-      ta.className = 'yvne-text'; ta.rows = 1; ta.placeholder = '輸入文字，Enter 確認';
+      ta.className = 'yvne-text'; ta.rows = 1; ta.placeholder = 'Type text, Enter to confirm';
       const fs = baseSize() * 6 * view.s;
       Object.assign(ta.style, { left: ev.clientX - r.left + 'px', top: ev.clientY - r.top + 'px', color, fontSize: Math.max(12, fs) + 'px' });
       stage.appendChild(ta);
@@ -397,7 +397,7 @@
     async function save() {
       if (!opts.onSave) return;
       const btn = $('[data-act=save]');
-      btn.disabled = true; btn.textContent = '儲存中…';
+      btn.disabled = true; btn.textContent = 'Saving…';
       try {
         for (let i = 0; i < st.length; i++) {
           const s = st[i];
@@ -407,11 +407,11 @@
           images[i].edits = isEmpty(s.edits) ? null : clone(s.edits);
           s.dirty = false;
         }
-      } catch (e) { console.error(e); say('儲存失敗：' + e.message); setTimeout(() => say(''), 3000); }
+      } catch (e) { console.error(e); say('Save failed: ' + e.message); setTimeout(() => say(''), 3000); }
       refreshUI();
     }
     function close(force) {
-      if (!force && st.some((s) => s.dirty) && !confirm('有尚未儲存的修改，確定要關閉嗎？')) return;
+      if (!force && st.some((s) => s.dirty) && !confirm('You have unsaved changes. Close anyway?')) return;
       closed = true;
       g.removeEventListener('keydown', onKey, true);
       g.removeEventListener('keyup', onKeyUp, true);

@@ -2,16 +2,16 @@ const $ = (id) => document.getElementById(id);
 const send = (type, data) => chrome.runtime.sendMessage({ type, ...(data || {}) });
 let status = {};
 
-function fmt(ms) { return ms ? new Date(ms).toLocaleString('zh-TW', { hour12: false }) : '尚未同步'; }
+function fmt(ms) { return ms ? new Date(ms).toLocaleString('zh-TW', { hour12: false }) : 'Not synced yet'; }
 
 function render(r) {
   if (r && r.status) status = r.status;
-  $('state').textContent = status.syncing ? '同步中…' : status.signedIn ? `已連線 Google Drive · 上次同步 ${fmt(status.lastSync)}` : '尚未登入 Google（筆記目前只存在本機）';
-  if (r && r.boardCount != null) $('counts').textContent = `本機共有 ${r.boardCount} 個 Board、${r.itemCount} 張卡片`;
-  $('auth').textContent = status.signedIn ? '登出' : '登入 Google';
+  $('state').textContent = status.syncing ? 'Syncing…' : status.signedIn ? `Connected to Google Drive · last sync ${fmt(status.lastSync)}` : 'Not signed in to Google (notes are only on this computer)';
+  if (r && r.boardCount != null) $('counts').textContent = `${r.boardCount} boards, ${r.itemCount} cards on this computer`;
+  $('auth').textContent = status.signedIn ? 'Sign out' : 'Sign in with Google';
   $('auth').classList.toggle('primary', !status.signedIn);
   $('sync').disabled = !status.signedIn || status.syncing;
-  $('err').textContent = status.error ? '錯誤：' + status.error : '';
+  $('err').textContent = status.error ? 'Error: ' + status.error : '';
   if (document.activeElement !== $('web')) $('web').value = status.webUrl || '';
 }
 
@@ -21,14 +21,14 @@ $('auth').onclick = async () => {
   $('auth').disabled = true;
   const r = await send(status.signedIn ? 'signOut' : 'signIn');
   $('auth').disabled = false;
-  if (r && !r.ok) $('err').textContent = '登入失敗：' + r.error + '（請確認 manifest.json 的 oauth2.client_id 已換成你的用戶端 ID）';
+  if (r && !r.ok) $('err').textContent = 'Sign-in failed: ' + r.error + ' (check that oauth2.client_id in manifest.json is your client ID)';
   refresh();
 };
 $('sync').onclick = async () => { $('sync').disabled = true; await send('syncNow'); refresh(); };
 $('web').onchange = () => send('setWebUrl', { url: $('web').value.trim() });
 $('open').onclick = async () => {
   const url = $('web').value.trim();
-  if (!url) return ($('err').textContent = '請先填入知識庫網站網址');
+  if (!url) return ($('err').textContent = 'Enter the knowledge base URL first');
   await send('setWebUrl', { url });
   chrome.tabs.create({ url });
 };

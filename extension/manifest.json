@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "YT Vision Notes — YouTube 截圖筆記",
+  "name": "YT Vision Notes — YouTube screenshot notes",
   "short_name": "YT Vision Notes",
   "version": "0.3.0",
-  "description": "在 YouTube 旁邊直接做白板式截圖筆記：Board 裡再開 Board、自由擺放卡片、可拉寬面板或彈出到第二螢幕，並同步到你的 Google Drive。",
+  "description": "Whiteboard-style screenshot notes right next to YouTube: boards inside boards, free-form cards, a resizable or pop-out panel, synced to your Google Drive.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

@@ -17,7 +17,7 @@
   const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
   const done = (tx) => new Promise((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error('tx aborted')); });
   const strip = (v) => { const o = {}; for (const k in v) if (k[0] !== '_') o[k] = v[k]; return o; };
-  const ITEM_KEYS = ['x', 'y', 'w', 'color', 'text', 'title', 'url', 'ts', 'video', 'image', 'boardId', 'comments', 'col', 'ord', 'from', 'to', 'arrow', 'label', 'hex', 'name', 'rows', 'strokes', 'sh', 'pts', 'size', 'query', 'file'];
+  const ITEM_KEYS = ['x', 'y', 'w', 'color', 'text', 'title', 'url', 'ts', 'video', 'image', 'boardId', 'comments', 'col', 'ord', 'from', 'to', 'arrow', 'label', 'hex', 'name', 'rows', 'strokes', 'sh', 'pts', 'size', 'query', 'file', 'collapsed', 'locked'];
   const TRASH_MS = 30 * 24 * 3600 * 1000; // deleted cards keep their images this long (restorable from the trash)
 
   class Store {
@@ -75,13 +75,13 @@
     async summaries() {
       const out = {};
       for (const b of await this.listBoards(true)) out[b.id] = YVN.summarizeBoard(b);
-      if (!out[YVN.HOME]) out[YVN.HOME] = YVN.summarizeBoard(YVN.emptyBoard(YVN.HOME, '首頁'));
+      if (!out[YVN.HOME]) out[YVN.HOME] = YVN.summarizeBoard(YVN.emptyBoard(YVN.HOME, 'Home'));
       return out;
     }
     async getBoard(id) {
       const b = await req((await this._os('boards')).get(id));
       if (b) return b;
-      return id === YVN.HOME ? { ...YVN.emptyBoard(YVN.HOME, '首頁'), _virtual: true } : null;
+      return id === YVN.HOME ? { ...YVN.emptyBoard(YVN.HOME, 'Home'), _virtual: true } : null;
     }
 
     /** Atomic read-modify-write on one board. fn(board|null) returns the board to store (or null to skip). */
@@ -97,7 +97,7 @@
     }
     async _mutate(id, fn) {
       const b = await this._update(id, (cur) => {
-        const b = cur || (id === YVN.HOME ? YVN.emptyBoard(YVN.HOME, '首頁') : null);
+        const b = cur || (id === YVN.HOME ? YVN.emptyBoard(YVN.HOME, 'Home') : null);
         if (!b) return null;
         if (fn(b) === false) return null;
         b.updatedAt = Date.now();
@@ -125,7 +125,7 @@
       o = o || {};
       const id = YVN.uid('b_');
       const now = Date.now();
-      const board = { ...YVN.emptyBoard(id, o.title || '新 Board', parentId), color: o.color || YVN.BOARD_COLORS[5], _dirty: true };
+      const board = { ...YVN.emptyBoard(id, o.title || 'New Board', parentId), color: o.color || YVN.BOARD_COLORS[5], _dirty: true };
       await this._update(id, () => board);
       const item = await this.putItem(parentId, { type: 'board', boardId: id, x: o.x || 40, y: o.y || 40, w: YVN.CARD_W.board, createdAt: now });
       this._emit('board:' + id);
@@ -230,7 +230,7 @@
         for (const it of b.items) {
           if (!it.deleted || it.moved || it.purged || it.purge || !it.type) continue;
           if (Date.now() - (it.updatedAt || 0) > TRASH_MS) continue;
-          out.push({ boardId: b.id, boardTitle: b.id === YVN.HOME ? '首頁' : b.title, item: strip(it), boardRefTitle: it.type === 'board' ? (sums[it.boardId] || {}).title || '' : null, deletedAt: it.updatedAt });
+          out.push({ boardId: b.id, boardTitle: b.id === YVN.HOME ? 'Home' : b.title, item: strip(it), boardRefTitle: it.type === 'board' ? (sums[it.boardId] || {}).title || '' : null, deletedAt: it.updatedAt });
         }
       }
       return out.sort((a, c) => c.deletedAt - a.deletedAt);
@@ -351,7 +351,7 @@
         if (terms.every((t) => (b.title || '').toLowerCase().includes(t))) out.push({ boardId: b.id, boardTitle: b.title, itemId: null, type: 'board', text: b.title });
         for (const it of YVN.liveItems(b)) {
           const text = YVN.itemText(it);
-          if (terms.every((t) => text.toLowerCase().includes(t))) out.push({ boardId: b.id, boardTitle: b.id === YVN.HOME ? '首頁' : b.title, itemId: it.id, type: it.type, text, ts: it.ts, updatedAt: it.updatedAt });
+          if (terms.every((t) => text.toLowerCase().includes(t))) out.push({ boardId: b.id, boardTitle: b.id === YVN.HOME ? 'Home' : b.title, itemId: it.id, type: it.type, text, ts: it.ts, updatedAt: it.updatedAt });
         }
       }
       return out.slice(0, 200);
@@ -421,7 +421,7 @@
           y += rowH + 60;
         }
         const existing = await this.getBoard(boardId);
-        const board = { ...YVN.emptyBoard(boardId, cat ? cat.name : '未分類', YVN.HOME), color: cat ? cat.color : '#8b8d98', items, metaUpdatedAt: 1 };
+        const board = { ...YVN.emptyBoard(boardId, cat ? cat.name : 'Unsorted', YVN.HOME), color: cat ? cat.color : '#8b8d98', items, metaUpdatedAt: 1 };
         await this._update(boardId, () => ({ ...YVN.mergeBoard(existing ? strip(existing) : null, board), _dirty: true }));
         homeItems.push({ id: 'i_v1_ref_' + key, type: 'board', boardId, x: 40 + (gi % 4) * 140, y: 40 + Math.floor(gi / 4) * 140, w: 120, createdAt: gi, updatedAt: 1, deleted: false });
         gi++;

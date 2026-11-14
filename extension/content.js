@@ -28,14 +28,14 @@
   // ---------- capture / seek ----------
   function captureFrame() {
     const v = videoEl();
-    if (!v || !v.videoWidth || !currentVideoId()) throw new Error('找不到影片畫面');
+    if (!v || !v.videoWidth || !currentVideoId()) throw new Error('No video frame found');
     const c = document.createElement('canvas');
     c.width = v.videoWidth; c.height = v.videoHeight;
     try {
       c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); // raw frame: no overlay, progress bar or controls
       return { dataURL: c.toDataURL('image/webp', 0.92), w: c.width, h: c.height, ts: Math.floor(v.currentTime), video: currentVideo() };
     } catch (e) {
-      throw new Error('此影片受保護，無法擷取畫面'); // DRM / tainted canvas
+      throw new Error('This video is protected and cannot be captured'); // DRM / tainted canvas
     }
   }
   function seek(video, ts) {
@@ -59,14 +59,14 @@
 
   // ---------- panel ----------
   function webUrl(hash) {
-    if (!S.status.webUrl) { toast('請先在擴充功能圖示的彈出視窗設定知識庫網址'); return; }
+    if (!S.status.webUrl) { toast('Set the knowledge base URL in the extension popup first'); return; }
     window.open(S.status.webUrl.replace(/#.*$/, '') + (hash || ''), '_blank', 'noopener');
   }
   function renderStatus() {
     if (!ui.sync) return;
     const st = S.status;
     ui.sync.className = 'yb-hbtn yvn-sync ' + (st.syncing ? 'busy' : st.error ? 'err' : st.signedIn ? 'ok' : '');
-    ui.sync.title = st.syncing ? '同步中…' : st.error ? '同步失敗：' + st.error : st.signedIn ? '已同步到 Google Drive（點一下立即同步）' : '尚未登入 Google：筆記只存在本機（點擴充功能圖示登入）';
+    ui.sync.title = st.syncing ? 'Syncing…' : st.error ? 'Sync failed: ' + st.error : st.signedIn ? 'Synced to Google Drive (click to sync now)' : 'Not signed in to Google: notes are only on this computer (sign in from the extension icon)';
   }
 
   function buildPanel() {
@@ -82,9 +82,9 @@
       toast,
       headerExtras: [
         ui.sync,
-        el('button', { class: 'yb-hbtn', title: '在網站開啟這個 Board', 'aria-label': '在網站開啟', onclick: () => webUrl(ui.view.boardId === YVN.HOME ? '#/' : `#/b/${encodeURIComponent(ui.view.boardId)}`) }, icon('external', 17)),
-        el('button', { class: 'yb-hbtn', title: '彈出成獨立視窗（可拖到另一個螢幕）', 'aria-label': '彈出成獨立視窗', onclick: popout }, icon('popout', 17)),
-        el('button', { class: 'yb-hbtn', title: '關閉筆記', 'aria-label': '關閉筆記', onclick: () => setOn(false) }, icon('close', 17)),
+        el('button', { class: 'yb-hbtn', title: 'Open this board on the website', 'aria-label': 'Open on website', onclick: () => webUrl(ui.view.boardId === YVN.HOME ? '#/' : `#/b/${encodeURIComponent(ui.view.boardId)}`) }, icon('external', 17)),
+        el('button', { class: 'yb-hbtn', title: 'Pop out into its own window (drag it to another screen)', 'aria-label': 'Pop out', onclick: popout }, icon('popout', 17)),
+        el('button', { class: 'yb-hbtn', title: 'Close notes', 'aria-label': 'Close notes', onclick: () => setOn(false) }, icon('close', 17)),
       ],
     });
     // keep YouTube hotkeys (k, j, f, space…) away while typing in the panel
@@ -127,7 +127,7 @@
 
   function mountSplitter(secondary) {
     if (!ui.split) {
-      ui.split = el('div', { id: 'yvn-split', title: '拖曳調整影片與筆記的比例（雙擊切換 1/3、1/2、2/3）', role: 'separator', 'aria-orientation': 'vertical' }, el('span'));
+      ui.split = el('div', { id: 'yvn-split', title: 'Drag to resize video and notes (double-click cycles 1/3, 1/2, 2/3)', role: 'separator', 'aria-orientation': 'vertical' }, el('span'));
       ui.split.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
         e.preventDefault();
@@ -176,7 +176,7 @@
       b.classList.toggle('on', S.on && !S.popped);
       b.classList.toggle('popped', S.popped);
       b.setAttribute('aria-pressed', String(S.on));
-      b.title = S.popped ? '筆記已在獨立視窗開啟（點一下切換過去）' : '截圖筆記 (Vision Notes)';
+      b.title = S.popped ? 'Notes are open in a separate window (click to switch)' : 'Vision Notes';
     }
     if (active) mountPanel();
     applyWidth();
@@ -201,7 +201,7 @@
     path.setAttribute('fill', 'currentColor');
     path.setAttribute('d', 'M11 9h10l5 5v13a1 1 0 0 1-1 1H11a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1zm1 2v15h12V15h-4v-4h-8zm2 7h3v-3h2v3h3v2h-3v3h-2v-3h-3v-2z');
     svg.appendChild(path);
-    const btn = el('button', { class: 'ytp-button yvn-toggle', title: '截圖筆記 (Vision Notes)', 'aria-label': '截圖筆記', 'aria-pressed': String(S.on), onclick: () => setOn(!(S.on && !S.popped)) });
+    const btn = el('button', { class: 'ytp-button yvn-toggle', title: 'Vision Notes', 'aria-label': 'Vision Notes', 'aria-pressed': String(S.on), onclick: () => setOn(!(S.on && !S.popped)) });
     btn.appendChild(svg);
     bar.prepend(btn);
     render();

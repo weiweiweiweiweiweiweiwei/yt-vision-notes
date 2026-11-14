@@ -9,10 +9,10 @@
   const remote = YVN.makeRemote({ portName: 'yvn-win' });
   let status = {};
 
-  const sync = el('button', { class: 'yb-hbtn win-sync', title: '同步', onclick: () => remote.send('syncNow').catch(() => {}) }, el('i'));
+  const sync = el('button', { class: 'yb-hbtn win-sync', title: 'Sync', onclick: () => remote.send('syncNow').catch(() => {}) }, el('i'));
   const renderStatus = () => {
     sync.className = 'yb-hbtn win-sync ' + (status.syncing ? 'busy' : status.error ? 'err' : status.signedIn ? 'ok' : '');
-    sync.title = status.syncing ? '同步中…' : status.error ? '同步失敗：' + status.error : status.signedIn ? '已同步到 Google Drive' : '尚未登入 Google';
+    sync.title = status.syncing ? 'Syncing…' : status.error ? 'Sync failed: ' + status.error : status.signedIn ? 'Synced to Google Drive' : 'Not signed in to Google';
   };
 
   const root = document.getElementById('board');
@@ -27,11 +27,11 @@
     seek: (video, ts) => remote.send('seekTab', { tabId, video, ts }).catch((e) => view.toast(e.message)),
     headerExtras: [
       sync,
-      el('button', { class: 'yb-hbtn', title: '在網站開啟這個 Board', 'aria-label': '在網站開啟', onclick: () => {
-        if (!status.webUrl) return view.toast('請先在擴充功能圖示的彈出視窗設定知識庫網址');
+      el('button', { class: 'yb-hbtn', title: 'Open this board on the website', 'aria-label': 'Open on website', onclick: () => {
+        if (!status.webUrl) return view.toast('Set the knowledge base URL in the extension popup first');
         window.open(status.webUrl.replace(/#.*$/, '') + (view.boardId === YVN.HOME ? '#/' : `#/b/${encodeURIComponent(view.boardId)}`), '_blank');
       } }, icon('external', 17)),
-      el('button', { class: 'yb-hbtn', title: '收回到 YouTube 右側', 'aria-label': '收回到 YouTube 右側', onclick: () => remote.send('closePopout') }, icon('dock', 17)),
+      el('button', { class: 'yb-hbtn', title: 'Dock back into YouTube', 'aria-label': 'Dock back into YouTube', onclick: () => remote.send('closePopout') }, icon('dock', 17)),
     ],
     onNavigate: (id) => {
       try { localStorage.setItem('winBoard', id); } catch (e) { /* ignore */ }

@@ -92,9 +92,9 @@ async function findYouTubeTab(preferId) {
 }
 async function toTab(tabId, msg) {
   const id = await findYouTubeTab(tabId);
-  if (!id) throw new Error('找不到正在播放的 YouTube 分頁');
+  if (!id) throw new Error('No YouTube video tab found');
   const r = await chrome.tabs.sendMessage(id, msg).catch(() => null);
-  if (!r) throw new Error('YouTube 分頁沒有回應，請重新整理那個分頁');
+  if (!r) throw new Error('The YouTube tab did not respond. Reload that tab');
   if (r.error) throw new Error(r.error);
   return r;
 }

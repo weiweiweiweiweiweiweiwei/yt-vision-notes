@@ -71,6 +71,8 @@
     swatch: '<rect x="4" y="4" width="12" height="16" rx="2"/><path d="M4 14h12"/><path d="m16 7 4 2-4 9"/>',
     undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
     redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    unlock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   };
   const icon = (name, size) => el('span', { class: 'yb-ic', 'aria-hidden': 'true', html: `<svg viewBox="0 0 24 24" width="${size || 18}" height="${size || 18}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>` });
@@ -116,15 +118,15 @@
       const r = this.root;
       r.classList.add('yb', 'yb-' + this.mode);
       YVN.setHTML(r, '');
-      this.crumbs = el('nav', { class: 'yb-crumbs', 'aria-label': 'Board 路徑' });
-      this.zoomLbl = el('button', { class: 'yb-hbtn yb-zoom', title: '符合全部（Ctrl+滾輪縮放）', onclick: () => this.fit() }, '100%');
+      this.crumbs = el('nav', { class: 'yb-crumbs', 'aria-label': 'Board path' });
+      this.zoomLbl = el('button', { class: 'yb-hbtn yb-zoom', title: 'Fit to screen (Ctrl+wheel to zoom)', onclick: () => this.fit() }, '100%');
       this.head = el('header', { class: 'yb-head' }, this.crumbs, el('span', { class: 'yb-grow' }),
-        this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: '復原 (Ctrl+Z)', 'aria-label': '復原', onclick: () => this.undo() }, icon('undo', 17)),
-        this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: '重做 (Ctrl+Y)', 'aria-label': '重做', onclick: () => this.redo() }, icon('redo', 17)),
-        el('button', { class: 'yb-hbtn', title: '搜尋全部筆記 (Ctrl+F)', 'aria-label': '搜尋', onclick: () => this.toggleSearch(true) }, icon('search')),
-        this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: '縮小', 'aria-label': '縮小', onclick: () => this.zoomBy(1 / 1.2) }, icon('minus', 16)),
+        this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: 'Undo (Ctrl+Z)', 'aria-label': 'Undo', onclick: () => this.undo() }, icon('undo', 17)),
+        this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: 'Redo (Ctrl+Y)', 'aria-label': 'Redo', onclick: () => this.redo() }, icon('redo', 17)),
+        el('button', { class: 'yb-hbtn', title: 'Search all notes (Ctrl+F)', 'aria-label': 'Search', onclick: () => this.toggleSearch(true) }, icon('search')),
+        this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: 'Zoom out', 'aria-label': 'Zoom out', onclick: () => this.zoomBy(1 / 1.2) }, icon('minus', 16)),
         this.zoomLbl,
-        this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: '放大', 'aria-label': '放大', onclick: () => this.zoomBy(1.2) }, icon('plus', 16)),
+        this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: 'Zoom in', 'aria-label': 'Zoom in', onclick: () => this.zoomBy(1.2) }, icon('plus', 16)),
         ...(this.o.headerExtras || []));
       this.recentRow = el('div', { class: 'yb-recent', hidden: true });
       this.layer = el('div', { class: 'yb-layer' });
@@ -137,55 +139,59 @@
       this.fileInput = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: (e) => { this._addFiles([...e.target.files], null, this._fileKind); e.target.value = ''; } });
 
       const T = {
-        shot: ['camera', '截圖', '擷取目前影片畫面，直接放進這個 Board（Alt+S）'],
-        summary: ['summary', '總結', '針對整部影片的總結筆記（不含截圖）'],
-        note: ['note', '筆記', '文字筆記（也可以雙擊空白處）'],
-        link: ['link', '連結', '網址或 YouTube 影片'],
-        todo: ['todo', '待辦', '待辦清單'],
-        line: ['line', '連線', '在卡片之間拉線或箭頭'],
-        board: ['board', 'Board', '新增子 Board'],
-        column: ['column', '欄', '欄：把卡片收成一直排，可整欄移動'],
-        comment: ['comment', '留言', '留言串：可回覆、可放進欄裡'],
-        table: ['table', '表格', '表格'],
-        sketch: ['sketch', '草圖', '在卡片裡手繪草圖'],
-        color: ['swatch', '色票', '顏色色票卡（點色碼即可複製）'],
-        heading: ['heading', '標題', '大標題文字（沒有卡片背景）'],
-        video: ['video', '影片', '嵌入 YouTube / Vimeo 影片，或上傳影片檔'],
-        map: ['map', '地圖', '嵌入地點地圖'],
-        audio: ['audio', '音訊', '上傳音訊檔，在卡片裡播放'],
-        doc: ['doc', '文件', '長篇文件：卡片顯示摘要，打開是全螢幕編輯'],
-        upload_image: ['image', '圖片', '上傳圖片（也可以貼上或拖曳）'],
-        upload: ['upload', '上傳', '上傳任何檔案（PDF、音訊、影片…）'],
-        draw: ['draw', '繪圖', '直接在白板上手繪'],
+        shot: ['camera', 'Capture', 'Capture the current video frame into this board (Alt+S)'],
+        summary: ['summary', 'Summary', 'A summary note for the whole video (no screenshot)'],
+        note: ['note', 'Note', 'Text note (or double-click empty space)'],
+        link: ['link', 'Link', 'A web link or YouTube video'],
+        todo: ['todo', 'To-do', 'To-do list'],
+        line: ['line', 'Line', 'Draw a line or arrow between cards'],
+        board: ['board', 'Board', 'New board inside this one'],
+        column: ['column', 'Column', 'Column: stack cards in a list and move them together'],
+        comment: ['comment', 'Comment', 'Comment thread: reply to it, put it in a column'],
+        table: ['table', 'Table', 'Table'],
+        sketch: ['sketch', 'Sketch', 'Sketch inside a card'],
+        color: ['swatch', 'Color', 'Color swatch (click the hex code to copy it)'],
+        heading: ['heading', 'Heading', 'Large heading text (no card background)'],
+        video: ['video', 'Video', 'Embed a YouTube / Vimeo video, or upload a video file'],
+        map: ['map', 'Map', 'Embed a map of a place'],
+        audio: ['audio', 'Audio', 'Upload an audio file and play it in the card'],
+        doc: ['doc', 'Document', 'Long-form document: the card shows a preview, opens full screen'],
+        upload_image: ['image', 'Image', 'Add an image (or paste / drop one)'],
+        upload: ['upload', 'Upload', 'Upload any file (PDF, audio, video…)'],
+        draw: ['draw', 'Draw', 'Draw freehand on the board'],
       };
       const MAIN = [this.o.capture && 'shot', this.o.capture && 'summary', 'note', 'link', 'todo', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'color'].filter(Boolean);
       const MORE = ['heading', 'video', 'map', 'audio', 'doc'];
       const LOWER = ['upload_image', 'upload', 'draw'];
-      const btn = (act) => el('button', { class: 'yb-tool' + (act === 'shot' ? ' yb-primary' : ''), title: T[act][2], dataset: { tool: act }, onclick: () => this.tool(act) }, icon(T[act][0], 20), el('span', {}, T[act][1]));
+      const btn = (act) => {
+        const b = el('button', { class: 'yb-tool' + (act === 'shot' ? ' yb-primary' : ''), title: T[act][2] + ' — click, or drag onto the board', dataset: { tool: act }, onclick: () => { if (this._toolDragged) { this._toolDragged = false; return; } this.tool(act); } }, icon(T[act][0], 20), el('span', {}, T[act][1]));
+        this._dragTool(b, act);
+        return b;
+      };
       let toolbar;
       if (this.mode === 'panel') {
         const main = ['shot', 'summary', 'board'].filter((k) => MAIN.includes(k));
         const rest = [...MAIN, ...MORE, ...LOWER].filter((k) => !main.includes(k));
         toolbar = el('div', { class: 'yb-bar' }, main.map(btn),
-          el('button', { class: 'yb-tool', title: '更多', onclick: (e) => this._menuAt(e.currentTarget, [
+          el('button', { class: 'yb-tool', title: 'More', onclick: (e) => this._menuAt(e.currentTarget, [
             ...rest.map((k) => ({ label: T[k][1], icon: T[k][0], run: () => this.tool(k) })),
             { sep: true },
-            { label: '復原 (Ctrl+Z)', icon: 'undo', run: () => this.undo() },
-            { label: '重做 (Ctrl+Y)', icon: 'redo', run: () => this.redo() },
-            { label: '垃圾桶', icon: 'trash', run: () => this.openTrash() },
-          ], true) }, icon('more', 20), el('span', {}, '更多')));
+            { label: 'Undo (Ctrl+Z)', icon: 'undo', run: () => this.undo() },
+            { label: 'Redo (Ctrl+Y)', icon: 'redo', run: () => this.redo() },
+            { label: 'Trash', icon: 'trash', run: () => this.openTrash() },
+          ], true) }, icon('more', 20), el('span', {}, 'More')));
         r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, this.vp), toolbar);
       } else {
         this.flyout = el('div', { class: 'yb-flyout', hidden: true },
-          ...MORE.map((k) => el('button', { class: 'yb-tool', title: T[k][2], onclick: () => { this.flyout.hidden = true; this.tool(k); } }, icon(T[k][0], 24), el('span', {}, T[k][1]))));
-        const moreBtn = el('button', { class: 'yb-tool yb-moretool', title: '更多工具', 'aria-label': '更多工具', onclick: (e) => {
+          ...MORE.map((k) => { const b = el('button', { class: 'yb-tool', title: T[k][2], onclick: () => { if (this._toolDragged) { this._toolDragged = false; return; } this.flyout.hidden = true; this.tool(k); } }, icon(T[k][0], 24), el('span', {}, T[k][1])); this._dragTool(b, k); return b; }));
+        const moreBtn = el('button', { class: 'yb-tool yb-moretool', title: 'More tools', 'aria-label': 'More tools', onclick: (e) => {
           const fr = e.currentTarget.getBoundingClientRect(), rr = r.getBoundingClientRect();
           this.flyout.hidden = !this.flyout.hidden;
           this.flyout.style.left = fr.right - rr.left + 8 + 'px';
           this.flyout.style.top = Math.max(8, Math.min(fr.top - rr.top - 60, rr.height - 260)) + 'px';
         } }, el('span', { class: 'yb-dots' }, icon('more', 20)));
         toolbar = el('div', { class: 'yb-tools' }, MAIN.map(btn), moreBtn, el('hr', { class: 'yb-tsep' }), LOWER.map(btn),
-          el('button', { class: 'yb-tool yb-trashbtn', title: '垃圾桶：刪除的卡片保留 30 天，可還原', onclick: () => this.openTrash() }, icon('trash', 20), el('span', {}, '垃圾桶')));
+          el('button', { class: 'yb-tool yb-trashbtn', title: 'Trash: deleted cards are kept for 30 days and can be restored', onclick: () => this.openTrash() }, icon('trash', 20), el('span', {}, 'Trash')));
         r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, toolbar, this.vp), this.flyout);
       }
       this.drawBar = this._buildDrawBar();
@@ -199,7 +205,7 @@
     }
 
     _buildSearch() {
-      this.sInput = el('input', { type: 'search', placeholder: '搜尋所有 Board 的筆記、#標籤、影片標題…', 'aria-label': '搜尋' });
+      this.sInput = el('input', { type: 'search', placeholder: 'Search notes, #tags and video titles in all boards…', 'aria-label': 'Search' });
       this.sList = el('ul', { class: 'yb-sres' });
       let t;
       this.sInput.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => this._runSearch(), 150); });
@@ -208,7 +214,7 @@
         if (e.key === 'Enter') { const f = this.sList.querySelector('li'); if (f) f.click(); }
       });
       return el('div', { class: 'yb-search', hidden: true },
-        el('div', { class: 'yb-srow' }, this.sInput, el('button', { class: 'yb-hbtn', 'aria-label': '關閉搜尋', onclick: () => this.toggleSearch(false) }, '✕')),
+        el('div', { class: 'yb-srow' }, this.sInput, el('button', { class: 'yb-hbtn', 'aria-label': 'Close search', onclick: () => this.toggleSearch(false) }, '✕')),
         this.sList);
     }
     toggleSearch(on, q) {
@@ -220,13 +226,13 @@
       this.sList.replaceChildren();
       if (!q) return;
       const res = await this.api.search(q);
-      if (!res.length) { this.sList.append(el('li', { class: 'yb-snone' }, '找不到符合的筆記')); return; }
-      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票', comment: '留言', heading: '標題', table: '表格', sketch: '草圖', video: '影片', map: '地圖', audio: '音訊', file: '檔案', doc: '文件', ink: '繪圖' };
+      if (!res.length) { this.sList.append(el('li', { class: 'yb-snone' }, 'No matching notes')); return; }
+      const label = { note: 'Note', shot: 'Capture', image: 'Image', board: 'Board', link: 'Link', column: 'Column', line: 'Line', color: 'Color', comment: 'Comment', heading: 'Heading', table: 'Table', sketch: 'Sketch', video: 'Video', map: 'Map', audio: 'Audio', file: 'File', doc: 'Document', ink: 'Draw' };
       for (const r of res) {
         const text = (r.text || '').replace(/\s+/g, ' ');
         this.sList.append(el('li', { tabindex: '0', onclick: () => { this.toggleSearch(false); this.open(r.type === 'board' && !r.itemId ? r.boardId : r.boardId, r.itemId); } },
-          el('small', {}, `${r.boardTitle || '首頁'} · ${label[r.type] || ''}${r.ts != null ? ' · ' + YVN.fmtTime(r.ts) : ''}`),
-          el('span', {}, text.length > 90 ? text.slice(0, 90) + '…' : text || '（無文字）')));
+          el('small', {}, `${r.boardTitle || 'Home'} · ${label[r.type] || ''}${r.ts != null ? ' · ' + YVN.fmtTime(r.ts) : ''}`),
+          el('span', {}, text.length > 90 ? text.slice(0, 90) + '…' : text || '(no text)')));
       }
     }
 
@@ -278,7 +284,7 @@
       if (out[0] !== HOME) out.unshift(HOME);
       return out;
     }
-    _title(id) { return id === HOME ? '首頁' : (this.sums[id] && this.sums[id].title) || (this.board && this.board.id === id && this.board.title) || '未命名'; }
+    _title(id) { return id === HOME ? 'Home' : (this.sums[id] && this.sums[id].title) || (this.board && this.board.id === id && this.board.title) || 'Untitled'; }
 
     _renderCrumbs() {
       const chain = this._chain();
@@ -286,9 +292,9 @@
       chain.forEach((id, i) => {
         const last = i === chain.length - 1;
         if (i) this.crumbs.append(el('span', { class: 'yb-sep', 'aria-hidden': 'true' }, '›'));
-        const b = el('button', { class: 'yb-crumb' + (last ? ' yb-cur' : ''), title: last && id !== HOME ? '雙擊重新命名' : this._title(id) },
+        const b = el('button', { class: 'yb-crumb' + (last ? ' yb-cur' : ''), title: last && id !== HOME ? 'Double-click to rename' : this._title(id) },
           id === HOME ? icon('home', 16) : el('i', { class: 'yb-cdot', style: `background:${(this.sums[id] || this.board || {}).color || '#8b8d98'}` }),
-          el('span', {}, id === HOME ? '首頁' : this._title(id)));
+          el('span', {}, id === HOME ? 'Home' : this._title(id)));
         if (!last) b.onclick = () => this.open(id);
         else if (id !== HOME) b.ondblclick = () => this._renameInline(b.querySelector('span'), id);
         this.crumbs.append(b);
@@ -302,9 +308,9 @@
       if (!show) return;
       const ids = (await this.api.recent()).filter((id) => this.sums[id] && !this.sums[id].deleted).slice(0, 8);
       if (!ids.length) return;
-      this.recentRow.replaceChildren(el('small', {}, '最近使用'),
+      this.recentRow.replaceChildren(el('small', {}, 'Recent'),
         ...ids.map((id) => el('button', { class: 'yb-chip', onclick: () => this.open(id) },
-          el('i', { class: 'yb-cdot', style: `background:${this.sums[id].color}` }), this.sums[id].title || '未命名')));
+          el('i', { class: 'yb-cdot', style: `background:${this.sums[id].color}` }), this.sums[id].title || 'Untitled')));
       this.recentRow.hidden = false;
     }
 
@@ -399,7 +405,7 @@
         keep.add(it.id);
         let e = this.els.get(it.id);
         const s = it.type === 'board' ? this.sums[it.boardId] || {} : {};
-        const sig = [it.updatedAt, it.type === 'board' ? [s.title, s.color, s.itemCount] : '', it.image && it.image.editedAt, (it.comments || []).length].join('|');
+        const sig = [it.updatedAt, it.locked, it.collapsed, it.type === 'board' ? [s.title, s.color, s.itemCount] : '', it.image && it.image.editedAt, (it.comments || []).length].join('|');
         if (!e || (e._sig !== sig && this.editing !== it.id)) {
           const fresh = this._card(it);
           fresh._sig = sig;
@@ -433,14 +439,14 @@
         }
         body.classList.toggle('yb-colempty', !list.length);
         const cnt = ce.querySelector('.yb-colcount');
-        if (cnt) cnt.textContent = `${list.length} 張卡片`;
+        if (cnt) cnt.textContent = `${list.length} ${list.length === 1 ? 'card' : 'cards'}`;
       }
       for (const [id, e] of this.els) if (!keep.has(id)) { e.remove(); this.els.delete(id); this.sel.delete(id); }
       for (const id of [...this.sel]) if (!keep.has(id)) this.sel.delete(id);
       this._paintSel();
       const msg = this.boardId === HOME
-        ? '這裡是首頁。按「Board」建立第一個 Board，例如「DaVinci 調色」。'
-        : this.o.capture ? '按「截圖」把目前影片畫面放進這個 Board，或按「總結」寫整部影片的心得。' : '雙擊空白處新增筆記，或從工具列新增卡片、Board。';
+        ? 'This is Home. Click "Board" to create your first board, e.g. "DaVinci Color Grading".'
+        : this.o.capture ? 'Click "Capture" to add the current video frame to this board, or "Summary" to write about the whole video.' : 'Double-click empty space to add a note, or add cards and boards from the toolbar.';
       this.empty.textContent = msg;
       this.empty.hidden = live.length > 0;
     }
@@ -453,84 +459,86 @@
       const c = el('div', { class: `yb-item yb-${it.type}`, dataset: { id: it.id } });
       if (it.color && it.type !== 'board') c.append(el('div', { class: 'yb-cbar', style: `background:${it.color}` }));
       if (it.type === 'note') {
-        if (it.video) c.append(el('button', { class: 'yb-src', dataset: { act: 'video' }, title: '回到影片：' + it.video.title }, icon('play', 12), el('b', {}, '總結'), el('span', {}, it.video.title || '')));
-        c.append(this._md(it.text, '雙擊輸入文字…'));
+        if (it.video) c.append(el('button', { class: 'yb-src', dataset: { act: 'video' }, title: 'Back to video: ' + it.video.title }, icon('play', 12), el('b', {}, 'Summary'), el('span', {}, it.video.title || '')));
+        c.append(this._md(it.text, 'Double-click to type…'));
       } else if (it.type === 'shot' || it.type === 'image') {
-        const img = el('img', { alt: it.text ? it.text.slice(0, 60) : '截圖', draggable: 'false' });
+        const img = el('img', { alt: it.text ? it.text.slice(0, 60) : 'Capture', draggable: 'false' });
         const wrap = el('div', { class: 'yb-imgwrap', style: it.image && it.image.w ? `aspect-ratio:${it.image.w}/${it.image.h}` : '' }, img);
-        if (it.image && it.image.edits) wrap.append(el('span', { class: 'yb-edited', title: '已標註／裁切' }, '✎'));
+        if (it.image && it.image.edits) wrap.append(el('span', { class: 'yb-edited', title: 'Annotated / cropped' }, '✎'));
         c.append(wrap);
         this._loadImg(it, img);
         // timestamp row, then the caption as a full-width block below it
         if (it.type === 'shot') {
           const foot = el('div', { class: 'yb-foot' });
-          if (it.ts != null) foot.append(el('button', { class: 'yb-ts', dataset: { act: 'seek' }, title: it.video ? `跳到 ${it.video.title} 的這個時間點` : '跳到這個時間點' }, YVN.fmtTime(it.ts)));
-          if (!it.text) foot.append(el('span', { class: 'yb-ph yb-capph' }, '雙擊加說明'));
+          if (it.ts != null) foot.append(el('button', { class: 'yb-ts', dataset: { act: 'seek' }, title: it.video ? `Jump to this moment in ${it.video.title}` : 'Jump to this moment' }, YVN.fmtTime(it.ts)));
+          if (!it.text) foot.append(el('span', { class: 'yb-ph yb-capph' }, 'Double-click to add a caption'));
           c.append(foot);
         }
         if (it.text) c.append(el('div', { class: 'yb-cap' }, this._md(it.text)));
       } else if (it.type === 'board') {
         const s = this.sums[it.boardId] || {};
         c.append(el('div', { class: 'yb-bicon', style: `background:${s.color || '#8b8d98'}` }, el('i'), el('i'), el('i'), el('i')),
-          el('div', { class: 'yb-btitle' }, s.title || (s.id ? '未命名' : '同步中…')),
-          el('div', { class: 'yb-bcount' }, s.itemCount != null ? `${s.itemCount} 張卡片` : ''));
+          el('div', { class: 'yb-btitle' }, s.title || (s.id ? 'Untitled' : 'Syncing…')),
+          el('div', { class: 'yb-bcount' }, s.itemCount != null ? `${s.itemCount} ${s.itemCount === 1 ? 'card' : 'cards'}` : ''));
       } else if (it.type === 'column') {
-        c.append(el('div', { class: 'yb-colhead', title: '雙擊改標題；拖曳這裡移動整欄' },
-          el('span', { class: 'yb-coltitle' + (it.title ? '' : ' yb-ph') }, it.title || '未命名欄'),
+        if (it.collapsed) c.classList.add('yb-colcollapsed');
+        c.append(el('button', { class: 'yb-colfold', dataset: { act: 'fold' }, title: it.collapsed ? 'Expand column' : 'Collapse column', 'aria-label': it.collapsed ? 'Expand column' : 'Collapse column' }, it.collapsed ? '+' : '−'));
+        c.append(el('div', { class: 'yb-colhead', title: 'Double-click to rename; drag here to move the column' },
+          el('span', { class: 'yb-coltitle' + (it.title ? '' : ' yb-ph') }, it.title || 'Untitled column'),
           el('small', { class: 'yb-colcount' }, '')),
         el('div', { class: 'yb-colbody' }));
       } else if (it.type === 'heading') {
-        c.append(el('div', { class: 'yb-htext' + (it.text ? '' : ' yb-ph') }, it.text || '標題'));
+        c.append(el('div', { class: 'yb-htext' + (it.text ? '' : ' yb-ph') }, it.text || 'Heading'));
       } else if (it.type === 'table') {
         c.append(this._tableEl(it.rows, false));
       } else if (it.type === 'sketch') {
         c.append(this._sketchSvg(it));
-        if (!(it.strokes || []).length) c.append(el('div', { class: 'yb-skph yb-ph' }, '雙擊開始畫'));
+        if (!(it.strokes || []).length) c.append(el('div', { class: 'yb-skph yb-ph' }, 'Double-click to start drawing'));
       } else if (it.type === 'video') {
         const vid = ytId(it.url), vimeo = /vimeo\.com\/(?:video\/)?(\d+)/.exec(it.url || '');
         const wrap = el('div', { class: 'yb-imgwrap yb-vwrap', dataset: { act: 'play' } });
         if (it.file) wrap.append(el('div', { class: 'yb-vfile' }, icon('video', 34), el('span', {}, it.file.name)));
         else if (vid) wrap.append(el('img', { src: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`, alt: '', draggable: 'false' }));
-        else wrap.append(el('div', { class: 'yb-vfile' }, icon('video', 34), el('span', {}, vimeo ? 'Vimeo' : it.url ? host(it.url) : '雙擊貼上影片網址')));
+        else wrap.append(el('div', { class: 'yb-vfile' }, icon('video', 34), el('span', {}, vimeo ? 'Vimeo' : it.url ? host(it.url) : 'Double-click to paste a video link')));
         if (it.url || it.file) wrap.append(el('span', { class: 'yb-playbadge' }, icon('play', 18)));
-        c.append(wrap, el('div', { class: 'yb-linkbody' }, el('div', { class: 'yb-linktxt' }, el('b', {}, it.title || (it.file ? it.file.name : it.url ? host(it.url) : '影片')), el('small', {}, it.file ? YVN.fmtSize(it.file.size) : host(it.url || '')))));
+        c.append(wrap, el('div', { class: 'yb-linkbody' }, el('div', { class: 'yb-linktxt' }, el('b', {}, it.title || (it.file ? it.file.name : it.url ? host(it.url) : 'Video')), el('small', {}, it.file ? YVN.fmtSize(it.file.size) : host(it.url || '')))));
       } else if (it.type === 'map') {
         c.append(el('div', { class: 'yb-imgwrap yb-mapwrap', dataset: { act: 'play' } },
-          el('div', { class: 'yb-vfile' }, icon('map', 34), el('span', {}, it.query ? '點一下載入地圖' : '雙擊輸入地點'))),
+          el('div', { class: 'yb-vfile' }, icon('map', 34), el('span', {}, it.query ? 'Click to load the map' : 'Double-click to enter a place'))),
         el('div', { class: 'yb-linkbody' }, el('span', { class: 'yb-linkic' }, icon('map', 18)),
-          el('div', { class: 'yb-linktxt' }, el('b', {}, it.query || '未設定地點'), it.query && el('a', { href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.query)}`, target: '_blank', rel: 'noopener noreferrer', dataset: { act: 'open' } }, '在 Google 地圖開啟'))));
+          el('div', { class: 'yb-linktxt' }, el('b', {}, it.query || 'No place set'), it.query && el('a', { href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.query)}`, target: '_blank', rel: 'noopener noreferrer', dataset: { act: 'open' } }, 'Open in Google Maps'))));
       } else if (it.type === 'audio') {
         const au = el('audio', { controls: true, preload: 'none' });
         this._loadMedia(it, au);
-        c.append(el('div', { class: 'yb-audio' }, el('div', { class: 'yb-ahead' }, el('span', { class: 'yb-aic' }, icon('audio', 20)), el('div', { class: 'yb-linktxt' }, el('b', {}, it.file ? it.file.name : '音訊'), el('small', {}, it.file ? YVN.fmtSize(it.file.size) : ''))), au));
+        c.append(el('div', { class: 'yb-audio' }, el('div', { class: 'yb-ahead' }, el('span', { class: 'yb-aic' }, icon('audio', 20)), el('div', { class: 'yb-linktxt' }, el('b', {}, it.file ? it.file.name : 'Audio'), el('small', {}, it.file ? YVN.fmtSize(it.file.size) : ''))), au));
       } else if (it.type === 'file') {
         c.append(el('div', { class: 'yb-linkbody' }, el('span', { class: 'yb-linkic yb-fileic' }, icon('file', 20)),
-          el('div', { class: 'yb-linktxt' }, el('b', {}, it.file ? it.file.name : '檔案'), el('small', {}, it.file ? `${YVN.fmtSize(it.file.size)} · 雙擊開啟` : ''))));
+          el('div', { class: 'yb-linktxt' }, el('b', {}, it.file ? it.file.name : 'File'), el('small', {}, it.file ? `${YVN.fmtSize(it.file.size)} · double-click to open` : ''))));
       } else if (it.type === 'doc') {
         const plain = YVN.plainText(it.text || '').replace(/\s+/g, ' ').trim();
         c.append(el('div', { class: 'yb-docic' }, icon('doc', 26)),
-          el('div', { class: 'yb-doctitle' + (it.title ? '' : ' yb-ph') }, it.title || '未命名文件'),
-          el('div', { class: 'yb-docprev' }, plain ? plain.slice(0, 120) + (plain.length > 120 ? '…' : '') : '雙擊開啟文件'));
+          el('div', { class: 'yb-doctitle' + (it.title ? '' : ' yb-ph') }, it.title || 'Untitled document'),
+          el('div', { class: 'yb-docprev' }, plain ? plain.slice(0, 120) + (plain.length > 120 ? '…' : '') : 'Double-click to open'));
       } else if (it.type === 'comment') {
         const thread = el('div', { class: 'yb-thread' });
         for (const cm of it.comments || []) thread.append(this._commentLine(cm));
-        c.append(thread, el('div', { class: 'yb-cform' }, el('button', { class: 'yb-replybtn', dataset: { act: 'creply' } }, (it.comments || []).length ? '回覆' : '輸入留言…')));
+        c.append(thread, el('div', { class: 'yb-cform' }, el('button', { class: 'yb-replybtn', dataset: { act: 'creply' } }, (it.comments || []).length ? 'Reply' : 'Write a comment…')));
       } else if (it.type === 'color') {
         c.append(el('div', { class: 'yb-swatch', style: `background:${it.hex || '#8b8d98'}` }),
           el('div', { class: 'yb-swfoot' },
-            el('b', { class: it.name ? '' : 'yb-ph' }, it.name || '未命名顏色'),
-            el('button', { class: 'yb-hex', dataset: { act: 'copyhex' }, title: '複製色碼' }, (it.hex || '').toUpperCase())));
+            el('b', { class: it.name ? '' : 'yb-ph' }, it.name || 'Untitled color'),
+            el('button', { class: 'yb-hex', dataset: { act: 'copyhex' }, title: 'Copy hex code' }, (it.hex || '').toUpperCase())));
       } else if (it.type === 'link') {
         const vid = ytId(it.url);
-        if (vid) c.append(el('div', { class: 'yb-imgwrap yb-yt', title: '雙擊開啟影片' }, el('img', { src: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`, alt: '', draggable: 'false' }), el('span', { class: 'yb-playbadge' }, icon('play', 18))));
+        if (vid) c.append(el('div', { class: 'yb-imgwrap yb-yt', title: 'Double-click to open the video' }, el('img', { src: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`, alt: '', draggable: 'false' }), el('span', { class: 'yb-playbadge' }, icon('play', 18))));
         c.append(el('div', { class: 'yb-linkbody' },
           !vid && el('span', { class: 'yb-linkic' }, icon('link', 18)),
-          el('div', { class: 'yb-linktxt' }, el('a', { href: it.url || '#', target: '_blank', rel: 'noopener noreferrer', dataset: { act: 'open' } }, it.title || it.url || '（空白連結）'), el('small', {}, host(it.url)))));
+          el('div', { class: 'yb-linktxt' }, el('a', { href: it.url || '#', target: '_blank', rel: 'noopener noreferrer', dataset: { act: 'open' } }, it.title || it.url || '(empty link)'), el('small', {}, host(it.url)))));
       }
       const nc = it.type === 'comment' ? 0 : (it.comments || []).length;
-      if (nc) c.append(el('button', { class: 'yb-cbadge', title: `${nc} 則留言`, dataset: { act: 'comments' } }, icon('comment', 13), String(nc)));
-      c.append(el('button', { class: 'yb-more', title: '選單', 'aria-label': '卡片選單', dataset: { act: 'menu' } }, icon('more', 16)));
-      if (it.type !== 'board') c.append(el('div', { class: 'yb-rs', title: '拖曳調整寬度' }));
+      if (nc) c.append(el('button', { class: 'yb-cbadge', title: `${nc} ${nc === 1 ? 'comment' : 'comments'}`, dataset: { act: 'comments' } }, icon('comment', 13), String(nc)));
+      if (it.locked) { c.classList.add('yb-locked'); c.append(el('span', { class: 'yb-lockbadge', title: 'Position locked' }, icon('lock', 12))); }
+      if (it.type !== 'board') c.append(el('div', { class: 'yb-rs', title: 'Drag to resize' }));
       return c;
     }
     _md(text, ph) {
@@ -545,7 +553,7 @@
         try { url = await this.api.getImage(this.boardId, it); } catch (e) { url = null; }
         if (url) this.imgCache.set(key, url);
       }
-      if (url) img.src = url; else img.alt = '圖片尚未同步';
+      if (url) img.src = url; else img.alt = 'Image not synced yet';
     }
 
     // ---------- interactions ----------
@@ -562,7 +570,7 @@
           const id = ink.dataset.id;
           return this._menuAt({ x: e.clientX, y: e.clientY }, [
             { colors: ['#f1f1f3', '#1d1d1f', ...YVN.BOARD_COLORS], pick: async (c) => { await this.m.patchItems(this.boardId, [{ id, color: c || '#8b8d98' }]); this.reload(); } },
-            { sep: true }, { label: '刪除筆跡', danger: true, run: async () => { await this.m.deleteItems(this.boardId, [id]); this.reload(); } }]);
+            { sep: true }, { label: 'Delete drawing', danger: true, run: async () => { await this.m.deleteItems(this.boardId, [id]); this.reload(); } }]);
         }
         const ln = e.target.closest('.yb-line, .yb-llabel');
         if (ln) { e.preventDefault(); this.sel = new Set([ln.dataset.id]); this._paintSel(); return this._lineMenu(ln.dataset.id, { x: e.clientX, y: e.clientY }); }
@@ -659,7 +667,8 @@
       else if (t.closest('[data-act], a, .yb-md input')) return;
       else if (card && e.button === 0) {
         const id = card.dataset.id;
-        if (t.classList.contains('yb-rs')) {
+        const cit = this.board.items.find((i) => i.id === id);
+        if (t.classList.contains('yb-rs') && !(cit && cit.locked)) {
           this.gesture = { kind: 'resize', id, start, w: card.offsetWidth / 1, el: card };
         } else {
           if (e.shiftKey || e.ctrlKey || e.metaKey) { this.sel.has(id) ? this.sel.delete(id) : this.sel.add(id); }
@@ -670,6 +679,7 @@
             const it = this.board.items.find((i) => i.id === sid);
             if (!it || it.deleted) continue;
             if (it.type === 'line') { lines.push(it); continue; }
+            if (it.locked || it.type === 'ink') continue;
             const ce = this.els.get(sid);
             const inCol = this._inCol(it) && ce && ce.isConnected;
             const r = inCol ? this._layerRect(ce) : { x: it.x, y: it.y };
@@ -677,7 +687,7 @@
           }
           // a card inside a selected column moves with the column
           for (const [sid] of orig) { const it = this.board.items.find((i) => i.id === sid); if (it && it.col && orig.has(it.col)) orig.delete(sid); }
-          this.gesture = { kind: 'drag', id, start, orig, lines, moved: false };
+          this.gesture = { kind: 'drag', id, start, orig, lines, moved: false, dup: e.altKey, ghosts: new Map() };
         }
       } else if (e.button === 0) {
         // empty canvas: drag = rectangle selection (Shift/Ctrl adds to the current selection)
@@ -717,16 +727,24 @@
         this._renderLines();
       } else if (gst.kind === 'drag') {
         if (!gst.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+        if (!gst.orig.size) return;
         if (!gst.moved) {
           gst.moved = true;
           for (const [id, o] of gst.orig) {
-            const c = this.els.get(id);
+            let c = this.els.get(id);
             if (!c) continue;
+            if (gst.dup) { // Alt+drag: move a copy, leave the original where it is
+              c = c.cloneNode(true);
+              c.classList.remove('yb-sel', 'yb-incol');
+              c.style.left = o.x + 'px'; c.style.top = o.y + 'px';
+              gst.ghosts.set(id, c);
+            }
             if (o.inCol) { c.classList.remove('yb-incol'); c.style.width = o.w + 'px'; }
             c.classList.add('yb-dragging'); this.layer.append(c);
           }
         }
-        for (const [id, o] of gst.orig) { const c = this.els.get(id); if (c) { c.style.left = o.x + dx / this.view.z + 'px'; c.style.top = o.y + dy / this.view.z + 'px'; } }
+        for (const [id, o] of gst.orig) { const c = gst.dup ? gst.ghosts.get(id) : this.els.get(id); if (c) { c.style.left = o.x + dx / this.view.z + 'px'; c.style.top = o.y + dy / this.view.z + 'px'; } }
+        if (gst.dup) { this._edgePan(e); return; }
         const under = document.elementFromPoint(e.clientX, e.clientY);
         const target = under && under.closest('.yb-board');
         const tid = target && !gst.orig.has(target.dataset.id) ? target : null;
@@ -805,6 +823,11 @@
       }
       if (gst.kind === 'drag') {
         const ids = [...gst.orig.keys()];
+        if (gst.dup && gst.moved) {
+          const positions = {};
+          for (const [id, g] of gst.ghosts) { positions[id] = { x: snap(parseFloat(g.style.left)), y: snap(parseFloat(g.style.top)) }; g.remove(); }
+          return this._duplicate(ids, positions);
+        }
         for (const id of ids) { const c = this.els.get(id); if (c) c.classList.remove('yb-dragging'); }
         if (!gst.moved) {
           const it = this.board.items.find((i) => i.id === gst.id);
@@ -871,7 +894,7 @@
       }
       await this.m.moveItems(this.boardId, targetBoardId, ids, positions);
       this.sel.clear();
-      this.toast(`已移到「${this._title(targetBoardId)}」`);
+      this.toast(`Moved to "${this._title(targetBoardId)}"`);
       return this.reload();
     }
 
@@ -902,12 +925,13 @@
         case 'seek': return this._seek(it.video, it.ts);
         case 'video': return this._seek(it.video, 0);
         case 'creply': return this.startEdit(it.id, { mode: 'reply' });
+        case 'fold': return this.m.patchItems(this.boardId, [{ id: it.id, collapsed: !it.collapsed }]).then(() => this.reload());
         case 'play': return this._play(it, card);
         case 'download': return this._openFile(it);
         case 'cedit': return this.startEdit(it.id, { mode: 'edit', cid: act.dataset.c });
         case 'copyhex': {
           const hex = (it.hex || '').toUpperCase();
-          if (navigator.clipboard) navigator.clipboard.writeText(hex).then(() => this.toast('已複製 ' + hex), () => this.toast(hex));
+          if (navigator.clipboard) navigator.clipboard.writeText(hex).then(() => this.toast('Copied ' + hex), () => this.toast(hex));
           return;
         }
         case 'comments': {
@@ -993,7 +1017,7 @@
       for (const ln of live) if (ln.type === 'line' && ((ln.from && all.has(ln.from.id)) || (ln.to && all.has(ln.to.id)))) all.add(ln.id);
       ids = [...all];
       const boards = ids.map((id) => this.board.items.find((i) => i.id === id)).filter((i) => i && i.type === 'board');
-      if (boards.length && !confirm(`刪除 ${boards.map((b) => '「' + this._title(b.boardId) + '」').join('、')} 會一併刪除裡面所有卡片，確定嗎？`)) return;
+      if (boards.length && !confirm(`Deleting ${boards.map((b) => '"' + this._title(b.boardId) + '"').join(', ')} also deletes every card inside. Continue?`)) return;
       await this.m.deleteItems(this.boardId, ids);
       this.sel.clear();
       this.reload();
@@ -1002,7 +1026,7 @@
     // ---------- menus ----------
     _menuAt(anchor, entries, above) {
       this.menu.replaceChildren(...entries.map((m) => m.colors
-        ? el('div', { class: 'yb-colors' }, ...m.colors.map((c) => el('button', { class: 'yb-swbtn' + (c ? '' : ' yb-nocolor'), title: c || '無顏色', 'aria-label': c || '無顏色', style: c ? `background:${c}` : '', onclick: () => { this._closeMenu(); m.pick(c); } })))
+        ? el('div', { class: 'yb-colors' }, ...m.colors.map((c) => el('button', { class: 'yb-swbtn' + (c ? '' : ' yb-nocolor'), title: c || 'No color', 'aria-label': c || 'No color', style: c ? `background:${c}` : '', onclick: () => { this._closeMenu(); m.pick(c); } })))
         : m.sep ? el('hr')
           : el('button', { class: 'yb-mi' + (m.danger ? ' yb-danger' : ''), role: 'menuitem', onclick: () => { this._closeMenu(); m.run(); } }, m.icon ? icon(m.icon, 16) : el('span', { class: 'yb-ic' }), m.label)));
       this.menu.hidden = false;
@@ -1021,36 +1045,43 @@
       const multi = this.sel.size > 1;
       const ids = [...this.sel];
       const entries = [];
-      if (!multi) {
-        if (it.type === 'board') entries.push({ label: '開啟', icon: 'board', run: () => this.open(it.boardId) }, { label: '重新命名', icon: 'note', run: () => this._renameCard(it) });
-        if (it.type === 'note' || it.type === 'shot' || it.type === 'image') entries.push({ label: it.type === 'note' ? '編輯文字' : '編輯說明', icon: 'note', run: () => this.startEdit(it.id) });
-        if (it.type === 'shot' || it.type === 'image') entries.push({ label: '開啟標註編輯器', icon: 'image', run: () => this.openEditor(it.id) });
-        if (it.type === 'shot' && it.ts != null) entries.push({ label: '跳到影片 ' + YVN.fmtTime(it.ts), icon: 'play', run: () => this._seek(it.video, it.ts) });
-        if (it.type === 'link') entries.push({ label: '開啟連結', icon: 'link', run: () => window.open(it.url, '_blank', 'noopener') }, { label: '編輯網址', icon: 'note', run: () => this.startEdit(it.id) });
-        if (it.type === 'column') entries.push({ label: '重新命名欄', icon: 'column', run: () => this._renameColumn(it) });
-        if (it.type === 'color') entries.push({ label: '編輯顏色', icon: 'swatch', run: () => this.startEdit(it.id) });
-        if (this._inCol(it)) entries.push({ label: '移出欄', icon: 'column', run: async () => {
-          const r = this._rectOf(it);
-          await this.m.patchItems(this.boardId, [{ id: it.id, col: null, x: snap(r.x + r.w + 40), y: snap(r.y) }]);
-          this.reload();
-        } });
-        if (it.type !== 'line') entries.push({ label: '從這張卡片拉線', icon: 'line', run: () => this._startLineFrom(it.id) });
-      }
-      const boardsHere = YVN.liveItems(this.board).filter((x) => x.type === 'board' && !ids.includes(x.id));
-      if (boardsHere.length) entries.push({ label: '移到 Board…', icon: 'board', run: () => this._menuAt(anchor, boardsHere.map((b) => ({ label: this._title(b.boardId), icon: 'board', run: () => this._moveInto(ids, b.boardId) }))) });
-      if (this.boardId !== HOME) {
-        const parent = (this.sums[this.boardId] || this.board).parentId || HOME;
-        entries.push({ label: `移到上一層（${this._title(parent)}）`, icon: 'home', run: () => this._moveInto(ids, parent) });
-      }
-      entries.push({
+      const sel = ids.map((x) => this.board.items.find((i) => i.id === x)).filter(Boolean);
+      const allLocked = sel.length && sel.every((x) => x.locked);
+      const lockEntry = { label: allLocked ? 'Unlock Position' : 'Lock Position', icon: allLocked ? 'unlock' : 'lock', run: async () => { await this.m.patchItems(this.boardId, ids.map((x) => ({ id: x, locked: !allLocked }))); this.reload(); } };
+      const colorEntry = {
         colors: [null, ...YVN.BOARD_COLORS],
         pick: async (c) => {
           if (!multi && it.type === 'board') await this.api.updateBoard(it.boardId, { color: c || '#8b8d98' });
           else await this.m.patchItems(this.boardId, ids.map((x) => ({ id: x, color: c })));
           this.reload();
         },
-      });
-      entries.push({ sep: true }, { label: multi ? `刪除 ${ids.length} 張卡片` : '刪除', danger: true, run: () => this.deleteSelected() });
+      };
+      if (!multi && it.type === 'column') {
+        // columns: only what's needed (rename by double-clicking the title, delete with the Delete key)
+        return this._menuAt(anchor, [lockEntry, { label: 'Draw line from this card', icon: 'line', run: () => this._startLineFrom(it.id) }, colorEntry]);
+      }
+      if (!multi) {
+        if (it.type === 'board') entries.push({ label: 'Open', icon: 'board', run: () => this.open(it.boardId) }, { label: 'Rename', icon: 'note', run: () => this._renameCard(it) });
+        if (it.type === 'note' || it.type === 'shot' || it.type === 'image') entries.push({ label: it.type === 'note' ? 'Edit text' : 'Edit caption', icon: 'note', run: () => this.startEdit(it.id) });
+        if (it.type === 'shot' || it.type === 'image') entries.push({ label: 'Open annotation editor', icon: 'image', run: () => this.openEditor(it.id) });
+        if (it.type === 'shot' && it.ts != null) entries.push({ label: 'Jump to video at ' + YVN.fmtTime(it.ts), icon: 'play', run: () => this._seek(it.video, it.ts) });
+        if (it.type === 'link') entries.push({ label: 'Open link', icon: 'link', run: () => window.open(it.url, '_blank', 'noopener') }, { label: 'Edit link', icon: 'note', run: () => this.startEdit(it.id) });
+        if (it.type === 'color') entries.push({ label: 'Edit color', icon: 'swatch', run: () => this.startEdit(it.id) });
+        if (this._inCol(it)) entries.push({ label: 'Take out of column', icon: 'column', run: async () => {
+          const r = this._rectOf(it);
+          await this.m.patchItems(this.boardId, [{ id: it.id, col: null, x: snap(r.x + r.w + 40), y: snap(r.y) }]);
+          this.reload();
+        } });
+        if (it.type !== 'line') entries.push({ label: 'Draw line from this card', icon: 'line', run: () => this._startLineFrom(it.id) });
+      }
+      const boardsHere = YVN.liveItems(this.board).filter((x) => x.type === 'board' && !ids.includes(x.id));
+      if (boardsHere.length) entries.push({ label: 'Move to board…', icon: 'board', run: () => this._menuAt(anchor, boardsHere.map((b) => ({ label: this._title(b.boardId), icon: 'board', run: () => this._moveInto(ids, b.boardId) }))) });
+      if (this.boardId !== HOME) {
+        const parent = (this.sums[this.boardId] || this.board).parentId || HOME;
+        entries.push({ label: `Move up to "${this._title(parent)}"`, icon: 'home', run: () => this._moveInto(ids, parent) });
+      }
+      entries.push({ sep: true }, lockEntry, colorEntry);
+      entries.push({ sep: true }, { label: multi ? `Delete ${ids.length} cards` : 'Delete', danger: true, run: () => this.deleteSelected() });
       this._menuAt(anchor, entries);
     }
 
@@ -1063,7 +1094,7 @@
       this.editing = id;
       c.classList.add('yb-editing');
       if (it.type === 'link') {
-        const inp = el('input', { class: 'yb-input', type: 'url', value: it.url || '', placeholder: '貼上網址，例如 YouTube 影片連結' });
+        const inp = el('input', { class: 'yb-input', type: 'url', value: it.url || '', placeholder: 'Paste a link, e.g. a YouTube video' });
         const box = el('div', { class: 'yb-editbox' }, inp);
         c.querySelector('.yb-linkbody').replaceWith(box);
         const yt = c.querySelector('.yb-yt'); if (yt) yt.remove();
@@ -1073,16 +1104,16 @@
         return;
       }
       if (it.type === 'heading') {
-        const inp = el('input', { class: 'yb-hinput', value: it.text || '', placeholder: '標題' });
+        const inp = el('input', { class: 'yb-hinput', value: it.text || '', placeholder: 'Heading' });
         inp.value = it.text || '';
         c.querySelector('.yb-htext').replaceWith(inp);
         return this._patchEdit(it, c, inp, () => ({ text: inp.value.trim() }), (v) => !v.text);
       }
       if (it.type === 'video' || it.type === 'map') {
         const isMap = it.type === 'map';
-        const inp = el('input', { class: 'yb-input', placeholder: isMap ? '地點或地址，例如：台北 101' : '貼上 YouTube 或 Vimeo 影片網址' });
+        const inp = el('input', { class: 'yb-input', placeholder: isMap ? 'A place or address, e.g. Taipei 101' : 'Paste a YouTube or Vimeo link' });
         inp.value = isMap ? it.query || '' : it.url || '';
-        const box = el('div', { class: 'yb-editbox' }, inp, !isMap && !it.file && el('button', { class: 'yb-btn', style: 'margin-top:6px', onclick: () => { this._edit.cancel = true; this.commitEdit(); this._pickFiles('video/*', 'video', it.id); } }, '或上傳影片檔…'));
+        const box = el('div', { class: 'yb-editbox' }, inp, !isMap && !it.file && el('button', { class: 'yb-btn', style: 'margin-top:6px', onclick: () => { this._edit.cancel = true; this.commitEdit(); this._pickFiles('video/*', 'video', it.id); } }, 'Or upload a video file…'));
         c.querySelector('.yb-linkbody').replaceWith(box);
         return this._patchEdit(it, c, inp, () => (isMap ? { query: inp.value.trim() } : { url: inp.value.trim() }), (v) => (isMap ? !v.query : !v.url && !it.file));
       }
@@ -1094,9 +1125,9 @@
         const redo = (rows) => { const n = this._tableEl(rows, true); tbl.replaceWith(n); return n; };
         let cur = tbl;
         const ops = el('div', { class: 'yb-tops' },
-          ...[['+ 列', (r) => { r.push(r[0].map(() => '')); }], ['+ 欄', (r) => { r.forEach((row) => row.push('')); }], ['− 列', (r) => { if (r.length > 1) r.pop(); }], ['− 欄', (r) => { if (r[0].length > 1) r.forEach((row) => row.pop()); }]]
+          ...[['+ Row', (r) => { r.push(r[0].map(() => '')); }], ['+ Column', (r) => { r.forEach((row) => row.push('')); }], ['− Row', (r) => { if (r.length > 1) r.pop(); }], ['− Column', (r) => { if (r[0].length > 1) r.forEach((row) => row.pop()); }]]
             .map(([label, fn]) => el('button', { class: 'yb-btn', onmousedown: (e) => e.preventDefault(), onclick: () => { const rows = readCur(); fn(rows); cur = redo2(rows); } }, label)),
-          el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, '完成'));
+          el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, 'Done'));
         const readCur = () => [...cur.querySelectorAll('tr')].map((tr) => [...tr.children].map((td) => td.textContent.replace(/\n/g, ' ').trim()));
         const redo2 = (rows) => { const n = this._tableEl(rows, true); cur.replaceWith(n); n.querySelector('[contenteditable]').focus(); return n; };
         c.append(ops);
@@ -1112,15 +1143,15 @@
       if (it.type === 'comment') {
         const mode = (opt && opt.mode) || 'reply';
         const cur = mode === 'edit' ? (it.comments || []).find((x) => x.id === opt.cid) : null;
-        const ta = el('textarea', { class: 'yb-cpop-ta yb-composer', rows: '2', placeholder: mode === 'edit' ? '編輯留言…' : (it.comments || []).length ? '回覆…' : '輸入留言…' });
+        const ta = el('textarea', { class: 'yb-cpop-ta yb-composer', rows: '2', placeholder: mode === 'edit' ? 'Edit comment…' : (it.comments || []).length ? 'Reply…' : 'Write a comment…' });
         ta.value = cur ? cur.text : '';
         const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; this._renderLines(); };
         ta.addEventListener('input', grow);
         const box = el('div', { class: 'yb-cform yb-editbox' }, ta,
           el('div', { class: 'yb-cpop-act' },
-            mode === 'edit' && el('button', { class: 'yb-btn yb-danger', onclick: () => { ta.value = ''; this.commitEdit(); } }, '刪除'),
-            el('button', { class: 'yb-btn', onclick: () => { this._edit.cancel = true; this.commitEdit(); } }, '取消'),
-            el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, mode === 'edit' ? '儲存' : '送出')));
+            mode === 'edit' && el('button', { class: 'yb-btn yb-danger', onclick: () => { ta.value = ''; this.commitEdit(); } }, 'Delete'),
+            el('button', { class: 'yb-btn', onclick: () => { this._edit.cancel = true; this.commitEdit(); } }, 'Cancel'),
+            el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, mode === 'edit' ? 'Save' : 'Post')));
         if (cur) {
           const line = c.querySelector(`.yb-cline[data-c="${cur.id}"] .yb-ctext`);
           if (line) line.replaceWith(box); else c.querySelector('.yb-cform').replaceWith(box);
@@ -1137,10 +1168,10 @@
         return;
       }
       if (it.type === 'color') {
-        const pick = el('input', { type: 'color', class: 'yb-swpick', 'aria-label': '選擇顏色' });
+        const pick = el('input', { type: 'color', class: 'yb-swpick', 'aria-label': 'Pick a color' });
         pick.value = /^#[0-9a-f]{6}$/i.test(it.hex || '') ? it.hex : '#8b8d98';
         const hex = el('input', { class: 'yb-input', value: (it.hex || '').toUpperCase(), placeholder: '#RRGGBB', spellcheck: 'false' });
-        const name = el('input', { class: 'yb-input', value: it.name || '', placeholder: '顏色名稱，例如：膚色高光' });
+        const name = el('input', { class: 'yb-input', value: it.name || '', placeholder: 'Color name, e.g. skin highlight' });
         const sw = c.querySelector('.yb-swatch');
         pick.addEventListener('input', () => { hex.value = pick.value.toUpperCase(); sw.style.background = pick.value; });
         hex.addEventListener('input', () => { const v = hex.value.trim(); if (/^#?[0-9a-f]{6}$/i.test(v)) { const h = v[0] === '#' ? v : '#' + v; pick.value = h; sw.style.background = h; } });
@@ -1154,7 +1185,7 @@
       }
       const comments = new Map((it.comments || []).map((cm) => [cm.id, { ...cm }]));
       const ed = new YVN.RichEditor(it.text || '', {
-        placeholder: it.type === 'note' ? (it.video ? '整部影片的重點、結論…' : '輸入文字…（選取文字可設定格式）') : '截圖說明…',
+        placeholder: it.type === 'note' ? (it.video ? 'Key points and takeaways from the whole video…' : 'Start typing… (select text to format it)') : 'Caption…',
         onDone: () => this.commitEdit(),
         onComment: (cid, span, isNew) => this._commentPop({ itemId: id, cid, anchor: span, editing: true, isNew }),
       });
@@ -1265,7 +1296,7 @@
         return (item.text || '').replace(new RegExp(`\\[([^\\]]+)\\]\\{#${o.cid}\\}`), '$1');
       };
       const showEdit = () => {
-        const ta = el('textarea', { class: 'yb-cpop-ta', rows: '3', placeholder: '輸入留言…（Ctrl+Enter 儲存）' });
+        const ta = el('textarea', { class: 'yb-cpop-ta', rows: '3', placeholder: 'Write a comment… (Ctrl+Enter to save)' });
         ta.value = cm.text || '';
         const save = async () => {
           const v = ta.value.trim();
@@ -1281,7 +1312,7 @@
         });
         this.cpop.replaceChildren(
           ...[quote && el('blockquote', {}, quote), ta,
-            el('div', { class: 'yb-cpop-act' }, el('button', { class: 'yb-btn', onclick: cancel }, '取消'), el('button', { class: 'yb-btn yb-btn-primary', onclick: save }, '儲存'))].filter(Boolean));
+            el('div', { class: 'yb-cpop-act' }, el('button', { class: 'yb-btn', onclick: cancel }, 'Cancel'), el('button', { class: 'yb-btn yb-btn-primary', onclick: save }, 'Save'))].filter(Boolean));
         this._placePop(o.anchor);
         ta.focus();
       };
@@ -1289,7 +1320,7 @@
         const d = new Date(cm.updatedAt || cm.createdAt || Date.now());
         this.cpop.replaceChildren(
           ...[quote && el('blockquote', {}, quote),
-            el('p', { class: 'yb-cpop-text' }, cm.text || '（空白留言）'),
+            el('p', { class: 'yb-cpop-text' }, cm.text || '(empty comment)'),
             el('small', {}, `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`),
             el('div', { class: 'yb-cpop-act' },
               el('button', { class: 'yb-btn yb-danger', onclick: async () => {
@@ -1297,9 +1328,9 @@
                 const text = unmark();
                 close(true);
                 if (!editing) await persist(map, text);
-              } }, '刪除'),
-              el('button', { class: 'yb-btn', onclick: () => showEdit() }, '編輯'),
-              el('button', { class: 'yb-btn', onclick: () => close(true) }, '關閉'))].filter(Boolean));
+              } }, 'Delete'),
+              el('button', { class: 'yb-btn', onclick: () => showEdit() }, 'Edit'),
+              el('button', { class: 'yb-btn', onclick: () => close(true) }, 'Close'))].filter(Boolean));
         this._placePop(o.anchor);
       };
       this.cpop.hidden = false;
@@ -1346,19 +1377,19 @@
     async undo() {
       if (this.editing) await this.commitEdit();
       const entry = this.history.pop();
-      if (!entry) return this.toast('沒有可以復原的動作');
+      if (!entry) return this.toast('Nothing to undo');
       for (const e of entry) await this.api.restoreItems(e.boardId, e.before);
       this.future.push(entry);
-      this.toast('已復原');
+      this.toast('Undone');
       this.reload();
     }
     async redo() {
       if (this.editing) await this.commitEdit();
       const entry = this.future.pop();
-      if (!entry) return this.toast('沒有可以重做的動作');
+      if (!entry) return this.toast('Nothing to redo');
       for (const e of entry) await this.api.restoreItems(e.boardId, e.after);
       this.history.push(entry);
-      this.toast('已重做');
+      this.toast('Redone');
       this.reload();
     }
 
@@ -1366,33 +1397,33 @@
     async openTrash() {
       this._closeMenu();
       const list = await this.api.trash();
-      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票', comment: '留言', heading: '標題', table: '表格', sketch: '草圖', video: '影片', map: '地圖', audio: '音訊', file: '檔案', doc: '文件', ink: '繪圖' };
+      const label = { note: 'Note', shot: 'Capture', image: 'Image', board: 'Board', link: 'Link', column: 'Column', line: 'Line', color: 'Color', comment: 'Comment', heading: 'Heading', table: 'Table', sketch: 'Sketch', video: 'Video', map: 'Map', audio: 'Audio', file: 'File', doc: 'Document', ink: 'Draw' };
       const rows = list.map((t) => {
         const it = t.item;
         const text = String(it.type === 'board' ? t.boardRefTitle || '' : YVN.itemText(it)).replace(/\s+/g, ' ');
         const d = new Date(t.deletedAt);
         return el('li', { class: 'yb-trow' },
           el('div', {},
-            el('small', {}, `${label[it.type] || ''} · 來自「${t.boardTitle || '首頁'}」 · ${d.getMonth() + 1}/${d.getDate()}`),
-            el('span', {}, text ? (text.length > 80 ? text.slice(0, 80) + '…' : text) : '（無文字）')),
+            el('small', {}, `${label[it.type] || ''} · from "${t.boardTitle || 'Home'}" · ${d.getMonth() + 1}/${d.getDate()}`),
+            el('span', {}, text ? (text.length > 80 ? text.slice(0, 80) + '…' : text) : '(no text)')),
           el('button', { class: 'yb-btn', onclick: async () => {
             await this.api.restoreFromTrash(t.boardId, it.id);
-            this.toast('已還原到「' + (t.boardTitle || '首頁') + '」');
+            this.toast('Restored to "' + (t.boardTitle || 'Home') + '」');
             this.reload(); this.openTrash();
-          } }, '還原'),
-          el('button', { class: 'yb-btn yb-danger', onclick: async () => { await this.api.purgeTrash([{ boardId: t.boardId, itemId: it.id }]); this.openTrash(); } }, '永久刪除'));
+          } }, 'Restore'),
+          el('button', { class: 'yb-btn yb-danger', onclick: async () => { await this.api.purgeTrash([{ boardId: t.boardId, itemId: it.id }]); this.openTrash(); } }, 'Delete forever'));
       });
       this.trashBox.replaceChildren(
         el('div', { class: 'yb-srow yb-thead' },
-          el('b', { class: 'yb-ttl' }, '垃圾桶'),
-          el('small', { class: 'yb-tnote' }, '刪除的卡片保留 30 天'),
+          el('b', { class: 'yb-ttl' }, 'Trash'),
+          el('small', { class: 'yb-tnote' }, 'Deleted cards are kept for 30 days'),
           list.length > 0 && el('button', { class: 'yb-btn yb-danger', onclick: async () => {
-            if (!confirm(`永久刪除垃圾桶裡的 ${list.length} 張卡片？此動作無法復原。`)) return;
+            if (!confirm(`Permanently delete ${list.length} cards in the trash? This can't be undone.`)) return;
             await this.api.purgeTrash(list.map((t) => ({ boardId: t.boardId, itemId: t.item.id })));
             this.openTrash();
-          } }, '清空'),
-          el('button', { class: 'yb-hbtn', 'aria-label': '關閉垃圾桶', onclick: () => { this.trashBox.hidden = true; } }, '✕')),
-        el('ul', { class: 'yb-sres' }, rows.length ? rows : el('li', { class: 'yb-snone' }, '垃圾桶是空的')));
+          } }, 'Empty'),
+          el('button', { class: 'yb-hbtn', 'aria-label': 'Close trash', onclick: () => { this.trashBox.hidden = true; } }, '✕')),
+        el('ul', { class: 'yb-sres' }, rows.length ? rows : el('li', { class: 'yb-snone' }, 'Trash is empty')));
       this.trashBox.hidden = false;
     }
 
@@ -1403,7 +1434,7 @@
         const r = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent('https://www.youtube.com/watch?v=' + vid)}`);
         if (r.ok) return (await r.json()).title || url;
       } catch (e) { /* CORS / offline */ }
-      return 'YouTube 影片';
+      return 'YouTube video';
     }
 
     _renameInline(span, boardId) {
@@ -1431,8 +1462,44 @@
     _after() {
       return this._cards().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).pop() || null;
     }
+    /** Press a toolbar button and drag it onto the board to create the card where it is dropped. */
+    _dragTool(btn, act) {
+      if (['line', 'draw', 'upload', 'upload_image', 'audio'].includes(act)) return; // these start a mode or a file picker
+      btn.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        const sx = e.clientX, sy = e.clientY;
+        let ghost = null;
+        const mv = (ev) => {
+          if (!ghost && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+          if (!ghost) {
+            ghost = el('div', { class: 'yb-toolghost' }, btn.querySelector('.yb-ic').cloneNode(true), el('span', {}, btn.textContent));
+            this.root.append(ghost);
+            if (this.flyout) this.flyout.hidden = true;
+          }
+          const rr = this.root.getBoundingClientRect();
+          ghost.style.left = ev.clientX - rr.left - 20 + 'px'; ghost.style.top = ev.clientY - rr.top - 16 + 'px';
+          const r = this.vp.getBoundingClientRect();
+          ghost.classList.toggle('yb-over', ev.clientX > r.left && ev.clientX < r.right && ev.clientY > r.top && ev.clientY < r.bottom);
+        };
+        const up = (ev) => {
+          window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
+          if (!ghost) return;
+          ghost.remove();
+          this._toolDragged = true;
+          setTimeout(() => { this._toolDragged = false; }, 0);
+          const r = this.vp.getBoundingClientRect();
+          if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return;
+          const pt = this._toBoard(ev.clientX, ev.clientY);
+          this._dropAt = { x: snap(pt.x - 20), y: snap(pt.y - 16) };
+          this.tool(act).finally(() => { this._dropAt = null; });
+        };
+        window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+      });
+    }
+
     _slot(w, h, at) {
       if (at) return at;
+      if (this._dropAt) { const d = this._dropAt; this._dropAt = null; return d; }
       const v = this._visible();
       const items = this._cards();
       const after = this._after();
@@ -1447,11 +1514,11 @@
       if (act === 'shot') return this.captureShot();
       if (act === 'summary') {
         const video = this.o.currentVideo && (await this.o.currentVideo());
-        if (!video) return this.toast('請先開啟一部 YouTube 影片');
+        if (!video) return this.toast('Open a YouTube video first');
         return this._addNote({ video, color: '#f5a524' });
       }
       if (act === 'note') return this._addNote({});
-      if (act === 'todo') return this._addNote({ text: '**待辦**\n- [ ] ', w: 240 });
+      if (act === 'todo') return this._addNote({ text: '**To-do**\n- [ ] ', w: 240 });
       if (act === 'board') return this._addBoard();
       if (act === 'link') return this._addLink('');
       if (act === 'column') return this._addColumn();
@@ -1468,7 +1535,7 @@
       if (act === 'draw') return this.setDraw(!this._draw);
       if (act === 'line') {
         this._lineMode = true; this.vp.classList.add('yb-linemode');
-        this.toast('從一張卡片（或空白處）拖曳到另一張卡片即可連線，Esc 取消');
+        this.toast('Drag from a card (or empty space) to another card to connect them. Esc to cancel');
         return;
       }
       if (act === 'upload') return this._pickFiles('', 'auto');
@@ -1485,7 +1552,7 @@
     }
     async _addBoard() {
       const p = this._slot(YVN.CARD_W.board, 120);
-      const { item } = await this.m.createBoard(this.boardId, { ...p, title: '新 Board', color: YVN.BOARD_COLORS[Math.floor(Math.random() * 8)] });
+      const { item } = await this.m.createBoard(this.boardId, { ...p, title: 'New Board', color: YVN.BOARD_COLORS[Math.floor(Math.random() * 8)] });
       await this.reload();
       this.focusItem(item.id, false);
       this._renameCard(item);
@@ -1531,7 +1598,7 @@
       for (const f of files) {
         const isImg = /^image\//.test(f.type) && kind !== 'auto-file';
         if (!isImg) {
-          if (f.size > 25 * 1024 * 1024) { this.toast(`「${f.name}」超過 25 MB，無法上傳`); continue; }
+          if (f.size > 25 * 1024 * 1024) { this.toast(`"${f.name}" is over 25 MB and can't be uploaded`); continue; }
           const type = /^audio\//.test(f.type) ? 'audio' : /^video\//.test(f.type) ? 'video' : 'file';
           const dataURL = await YVN.blobToDataURL(f);
           const file = { id: YVN.uid('f_'), name: f.name, mime: f.type || 'application/octet-stream', size: f.size, fileId: null };
@@ -1599,7 +1666,7 @@
       const c = it && this.els.get(it.id);
       const t = c && c.querySelector('.yb-coltitle');
       if (!t) return;
-      const inp = el('input', { class: 'yb-input yb-rename', value: it.title || '', placeholder: '欄的標題' });
+      const inp = el('input', { class: 'yb-input yb-rename', value: it.title || '', placeholder: 'Column title' });
       t.replaceWith(inp);
       inp.focus(); inp.select();
       let done = false;
@@ -1718,10 +1785,10 @@
       const colors = [dark ? '#f1f1f3' : '#1d1d1f', dark ? '#1d1d1f' : '#ffffff', '#e5484d', '#f5a524', '#30a46c', '#3e63dd', '#8e4ec6'];
       const bar = el('div', { class: 'yb-skbar' },
         ...colors.map((col) => el('button', { class: 'yb-swbtn' + (col === state.color ? ' on' : ''), style: `background:${col}`, 'aria-label': col, onclick: (e) => { state.color = col; state.erase = false; bar.querySelectorAll('.yb-swbtn, .yb-skerase').forEach((b) => b.classList.remove('on')); e.currentTarget.classList.add('on'); } })),
-        el('select', { class: 'yb-sksize', 'aria-label': '筆刷粗細', onchange: (e) => { state.size = +e.target.value; } }, el('option', { value: '2' }, '細'), el('option', { value: '3', selected: true }, '中'), el('option', { value: '6' }, '粗')),
-        el('button', { class: 'yb-btn yb-skerase', onclick: (e) => { state.erase = !state.erase; e.currentTarget.classList.toggle('on', state.erase); } }, '橡皮擦'),
-        el('button', { class: 'yb-btn', onclick: () => { strokes.length = 0; redraw(); } }, '清除'),
-        el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, '完成'));
+        el('select', { class: 'yb-sksize', 'aria-label': 'Brush size', onchange: (e) => { state.size = +e.target.value; } }, el('option', { value: '2' }, 'S'), el('option', { value: '3', selected: true }, 'M'), el('option', { value: '6' }, 'L')),
+        el('button', { class: 'yb-btn yb-skerase', onclick: (e) => { state.erase = !state.erase; e.currentTarget.classList.toggle('on', state.erase); } }, 'Eraser'),
+        el('button', { class: 'yb-btn', onclick: () => { strokes.length = 0; redraw(); } }, 'Clear'),
+        el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, 'Done'));
       bar.addEventListener('pointerdown', (e) => e.stopPropagation());
       c.append(bar);
       this._edit = { it, field: 'patch', get: () => ({ strokes }), empty: (v) => !v.strokes.length };
@@ -1730,12 +1797,12 @@
 
     // ---------- document (full-screen editor) ----------
     _docEdit(it, c) {
-      const title = el('input', { class: 'yb-doctitle-in', placeholder: '文件標題' });
+      const title = el('input', { class: 'yb-doctitle-in', placeholder: 'Document title' });
       title.value = it.title || '';
-      const ed = new YVN.RichEditor(it.text || '', { placeholder: '開始寫…（選取文字可設定格式）', onDone: () => this.commitEdit() });
+      const ed = new YVN.RichEditor(it.text || '', { placeholder: 'Start writing… (select text to format it)', onDone: () => this.commitEdit() });
       ed.el.classList.add('yb-docbody');
-      const close = el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, '完成');
-      const modal = el('div', { class: 'yb-docmodal' }, el('div', { class: 'yb-docpage' }, el('div', { class: 'yb-docbar' }, el('span', { class: 'yb-ph' }, '文件'), el('span', { class: 'yb-grow' }), close), title, ed.el));
+      const close = el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, 'Done');
+      const modal = el('div', { class: 'yb-docmodal' }, el('div', { class: 'yb-docpage' }, el('div', { class: 'yb-docbar' }, el('span', { class: 'yb-ph' }, 'Document'), el('span', { class: 'yb-grow' }), close), title, ed.el));
       modal.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (e.target === modal) this.commitEdit(); });
       modal.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); this.commitEdit(); } });
       this.root.append(modal);
@@ -1768,12 +1835,12 @@
       const vid = ytId(it.url), vimeo = /vimeo\.com\/(?:video\/)?(\d+)/.exec(it.url || '');
       const src = vid ? `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0` : vimeo ? `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1` : null;
       if (!src) { if (it.url) window.open(it.url, '_blank', 'noopener'); else this.startEdit(it.id); return; }
-      wrap.replaceChildren(el('iframe', { src, allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, title: it.title || '影片' }));
+      wrap.replaceChildren(el('iframe', { src, allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, title: it.title || 'Video' }));
     }
     async _openFile(it) {
       if (!it.file) return;
       const url = await this.api.getImage(this.boardId, it);
-      if (!url) return this.toast('檔案尚未同步到這台裝置');
+      if (!url) return this.toast('This file has not synced to this device yet');
       const a = el('a', { href: url, download: it.file.name, target: '_blank', rel: 'noopener' });
       document.body.append(a); a.click(); a.remove();
     }
@@ -1783,11 +1850,11 @@
       const colors = ['#f1f1f3', '#1d1d1f', '#e5484d', '#f5a524', '#30a46c', '#3e63dd', '#8e4ec6'];
       const bar = el('div', { class: 'yb-drawbar', hidden: true });
       const pick = (fn) => (e) => { fn(); bar.querySelectorAll('.on').forEach((b) => b.classList.remove('on')); e.currentTarget.classList.add('on'); };
-      bar.append(el('b', {}, '繪圖'),
+      bar.append(el('b', {}, 'Draw'),
         ...colors.map((col, i) => el('button', { class: 'yb-swbtn' + (i === 4 ? ' on' : ''), style: `background:${col}`, 'aria-label': col, onclick: pick(() => { this._draw.color = col; this._draw.erase = false; }) })),
-        el('select', { class: 'yb-sksize', 'aria-label': '筆刷粗細', onchange: (e) => { this._draw.size = +e.target.value; } }, el('option', { value: '2' }, '細'), el('option', { value: '4', selected: true }, '中'), el('option', { value: '8' }, '粗')),
-        el('button', { class: 'yb-btn', onclick: pick(() => { this._draw.erase = true; }) }, '橡皮擦'),
-        el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.setDraw(false) }, '完成'));
+        el('select', { class: 'yb-sksize', 'aria-label': 'Brush size', onchange: (e) => { this._draw.size = +e.target.value; } }, el('option', { value: '2' }, 'S'), el('option', { value: '4', selected: true }, 'M'), el('option', { value: '8' }, 'L')),
+        el('button', { class: 'yb-btn', onclick: pick(() => { this._draw.erase = true; }) }, 'Eraser'),
+        el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.setDraw(false) }, 'Done'));
       bar.addEventListener('pointerdown', (e) => e.stopPropagation());
       return bar;
     }
@@ -1795,7 +1862,46 @@
       this._draw = on ? { color: this._draw ? this._draw.color : '#30a46c', size: 4, erase: false } : null;
       this.drawBar.hidden = !on;
       this.vp.classList.toggle('yb-drawmode', !!on);
-      if (on) this.toast('在白板上直接畫，按 Esc 或「完成」結束');
+      if (on) this.toast('Draw on the board. Press Esc or "Done" to finish');
+    }
+
+    /** Copy cards (Alt+drag). Columns bring their cards; pictures and files get their own copy of the file. */
+    async _duplicate(ids, positions) {
+      const live = YVN.liveItems(this.board);
+      const before = await this._snap([this.boardId]);
+      const newIds = [];
+      let skipped = 0;
+      const copyOne = async (it, extra) => {
+        if (it.type === 'board') { skipped++; return null; }
+        const copy = JSON.parse(JSON.stringify(it));
+        for (const k of ['id', 'createdAt', 'updatedAt', 'deleted', 'removedFiles', 'purged', 'moved', 'locked']) delete copy[k];
+        Object.assign(copy, extra);
+        let data = null;
+        const media = it.image ? 'image' : it.file ? 'file' : null;
+        if (media) {
+          data = await this.api.getImage(this.boardId, it, 'orig');
+          if (!data) { skipped++; return null; }
+          copy[media] = { ...copy[media], id: YVN.uid(media === 'image' ? 'img_' : 'f_'), fileId: null, editedFileId: null };
+          if (media === 'image') { copy.image.edits = null; copy.image.editedAt = null; }
+        }
+        const saved = await this.api.putItem(this.boardId, copy, data);
+        return saved;
+      };
+      for (const id of ids) {
+        const it = live.find((i) => i.id === id);
+        if (!it) continue;
+        const pos = positions[id] || { x: it.x + 30, y: it.y + 30 };
+        const saved = await copyOne(it, { ...pos, col: null, ord: null });
+        if (!saved) continue;
+        newIds.push(saved.id);
+        if (it.type === 'column') {
+          for (const k of live.filter((i) => i.col === it.id)) await copyOne(k, { col: saved.id, ord: k.ord });
+        }
+      }
+      await this._pushHistory([this.boardId], before);
+      if (skipped) this.toast(skipped === 1 ? 'One card could not be duplicated (boards and unsynced files are skipped)' : `${skipped} cards could not be duplicated (boards and unsynced files are skipped)`);
+      await this.reload();
+      this.sel = new Set(newIds); this._paintSel();
     }
 
     // ---------- comment threads ----------
@@ -1812,12 +1918,12 @@
       if (this._meCache) return this._meCache;
       let me = null;
       try { me = this.api.me ? await this.api.me() : null; } catch (e) { me = null; }
-      this._meCache = me && me.name ? { name: me.name, photo: me.photo || '' } : { name: '我', photo: '' };
+      this._meCache = me && me.name ? { name: me.name, photo: me.photo || '' } : { name: 'Me', photo: '' };
       return this._meCache;
     }
     _commentLine(cm) {
-      const a = cm.author || { name: '我' };
-      const initial = (a.name || '我').trim().slice(0, 1).toUpperCase();
+      const a = cm.author || { name: 'Me' };
+      const initial = (a.name || 'Me').trim().slice(0, 1).toUpperCase();
       const av = el('div', { class: 'yb-avatar', 'aria-hidden': 'true' }, initial);
       if (a.photo) {
         const img = el('img', { src: a.photo, alt: '', referrerpolicy: 'no-referrer', draggable: 'false' });
@@ -1827,9 +1933,9 @@
       return el('div', { class: 'yb-cline', dataset: { c: cm.id } }, av,
         el('div', { class: 'yb-cdetails' },
           el('div', { class: 'yb-chead' },
-            el('b', {}, a.name || '我'),
-            el('small', { title: new Date(cm.createdAt || Date.now()).toLocaleString() }, YVN.friendlyTime(cm.updatedAt && cm.updatedAt !== cm.createdAt ? cm.updatedAt : cm.createdAt) + (cm.updatedAt && cm.updatedAt !== cm.createdAt ? '（已編輯）' : '')),
-            el('button', { class: 'yb-cedit', dataset: { act: 'cedit', c: cm.id } }, '編輯')),
+            el('b', {}, a.name || 'Me'),
+            el('small', { title: new Date(cm.createdAt || Date.now()).toLocaleString() }, YVN.friendlyTime(cm.updatedAt && cm.updatedAt !== cm.createdAt ? cm.updatedAt : cm.createdAt) + (cm.updatedAt && cm.updatedAt !== cm.createdAt ? ' (edited)' : '')),
+            el('button', { class: 'yb-cedit', dataset: { act: 'cedit', c: cm.id } }, 'Edit')),
           el('div', { class: 'yb-ctext yvn-md', html: YVN.renderMarkdown(cm.text || '') })));
     }
 
@@ -1862,14 +1968,18 @@
       this._lineMode = true; this.vp.classList.add('yb-linemode');
       const r = this._layerRect(c);
       this._pendingFrom = { id, x: Math.round(r.x + r.w / 2), y: Math.round(r.y + r.h / 2) };
-      this.toast('點一下或拖曳到另一張卡片完成連線，Esc 取消');
+      this.toast('Click or drag to another card to connect. Esc to cancel');
     }
     /** Resolve a stored end ({id?, x, y}) to a point or a card box. */
     _endBox(end) {
       if (!end) return { x: 0, y: 0 };
       if (end.id) {
         const c = this.els.get(end.id);
-        if (c && c.isConnected) return { rect: this._layerRect(c) };
+        if (c && c.isConnected) {
+          if (c.getClientRects().length) return { rect: this._layerRect(c) };
+          const col = c.closest('.yb-column');
+          if (col) return { rect: this._layerRect(col) };
+        }
       }
       return { x: end.x, y: end.y };
     }
@@ -1940,14 +2050,14 @@
       if (!ln) return;
       const set = async (patch) => { await this.m.patchItems(this.boardId, [{ id, ...patch }]); this.reload(); };
       this._menuAt(anchor, [
-        { label: ln.label ? '編輯文字' : '加上文字', icon: 'note', run: () => this._editLineLabel(id) },
-        { label: '單向箭頭 →', icon: 'line', run: () => set({ arrow: 'end' }) },
-        { label: '雙向箭頭 ↔', icon: 'line', run: () => set({ arrow: 'both' }) },
-        { label: '無箭頭 —', icon: 'line', run: () => set({ arrow: 'none' }) },
-        { label: '反轉方向', icon: 'redo', run: () => set({ from: ln.to, to: ln.from }) },
+        { label: ln.label ? 'Edit text' : 'Add label', icon: 'note', run: () => this._editLineLabel(id) },
+        { label: 'Arrow →', icon: 'line', run: () => set({ arrow: 'end' }) },
+        { label: 'Two-way arrow ↔', icon: 'line', run: () => set({ arrow: 'both' }) },
+        { label: 'No arrow —', icon: 'line', run: () => set({ arrow: 'none' }) },
+        { label: 'Reverse direction', icon: 'redo', run: () => set({ from: ln.to, to: ln.from }) },
         { colors: [null, ...YVN.BOARD_COLORS], pick: (c) => set({ color: c }) },
         { sep: true },
-        { label: '刪除連線', danger: true, run: async () => { await this.m.deleteItems(this.boardId, [id]); this.sel.delete(id); this.reload(); } },
+        { label: 'Delete line', danger: true, run: async () => { await this.m.deleteItems(this.boardId, [id]); this.sel.delete(id); this.reload(); } },
       ]);
     }
     _editLineLabel(id) {
@@ -1955,7 +2065,7 @@
       if (!ln) return;
       const A = this._endBox(ln.from), B = this._endBox(ln.to);
       const pa = this._clip(A, this._center(B)), pb = this._clip(B, this._center(A));
-      const inp = el('input', { class: 'yb-input yb-lblinput', value: ln.label || '', placeholder: '連線文字', style: `left:${(pa.x + pb.x) / 2}px;top:${(pa.y + pb.y) / 2}px` });
+      const inp = el('input', { class: 'yb-input yb-lblinput', value: ln.label || '', placeholder: 'Line label', style: `left:${(pa.x + pb.x) / 2}px;top:${(pa.y + pb.y) / 2}px` });
       this.layer.append(inp);
       inp.focus(); inp.select();
       let done = false;

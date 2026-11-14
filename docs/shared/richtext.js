@@ -267,18 +267,18 @@
 
   // ---------- floating format toolbar ----------
   const B = [
-    ['bold', '<b>B</b>', '粗體 (Ctrl+B)'],
-    ['italic', '<i>I</i>', '斜體 (Ctrl+I)'],
-    ['strike', '<s>S</s>', '刪除線 (Ctrl+Shift+X)'],
-    ['underline', '<u>U</u>', '底線 (Ctrl+U)'],
+    ['bold', '<b>B</b>', 'Bold (Ctrl+B)'],
+    ['italic', '<i>I</i>', 'Italic (Ctrl+I)'],
+    ['strike', '<s>S</s>', 'Strikethrough (Ctrl+Shift+X)'],
+    ['underline', '<u>U</u>', 'Underline (Ctrl+U)'],
     ['|'],
-    ['ul', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="7" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="17" r="1" fill="currentColor"/><path d="M9 7h11M9 12h11M9 17h11"/></svg>', '項目清單（行首輸入 - 加空白）'],
-    ['ol', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 7h10M10 12h10M10 17h10"/><text x="2.5" y="9" font-size="7" fill="currentColor" stroke="none">1</text><text x="2.5" y="14.5" font-size="7" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" fill="currentColor" stroke="none">3</text></svg>', '編號清單（行首輸入 1. 加空白）'],
-    ['center', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg>', '置中'],
-    ['code', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 8-4 4 4 4M15 8l4 4-4 4"/></svg>', '行內程式碼 (Ctrl+E)'],
+    ['ul', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="7" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="17" r="1" fill="currentColor"/><path d="M9 7h11M9 12h11M9 17h11"/></svg>', 'Bulleted list (type "- " at line start)'],
+    ['ol', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 7h10M10 12h10M10 17h10"/><text x="2.5" y="9" font-size="7" fill="currentColor" stroke="none">1</text><text x="2.5" y="14.5" font-size="7" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" fill="currentColor" stroke="none">3</text></svg>', 'Numbered list (type "1. " at line start)'],
+    ['center', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg>', 'Align center'],
+    ['code', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 8-4 4 4 4M15 8l4 4-4 4"/></svg>', 'Inline code (Ctrl+E)'],
     ['|'],
-    ['link', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>', '超連結 (Ctrl+K)'],
-    ['comment', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 5h16v11H10l-4 4v-4H4z"/></svg>', '新增留言'],
+    ['link', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>', 'Link (Ctrl+K)'],
+    ['comment', '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 5h16v11H10l-4 4v-4H4z"/></svg>', 'Add comment'],
   ];
 
   class FormatBar {
@@ -301,9 +301,9 @@
       this.linkBox.className = 'yb-fmt-link';
       this.linkBox.hidden = true;
       this.linkInput = document.createElement('input');
-      this.linkInput.type = 'url'; this.linkInput.placeholder = '貼上網址後按 Enter';
+      this.linkInput.type = 'url'; this.linkInput.placeholder = 'Paste a link and press Enter';
       this.unlinkBtn = document.createElement('button');
-      this.unlinkBtn.type = 'button'; this.unlinkBtn.textContent = '移除';
+      this.unlinkBtn.type = 'button'; this.unlinkBtn.textContent = 'Remove';
       this.linkBox.append(this.linkInput, this.unlinkBtn);
       el.append(this.btns, this.linkBox);
       container.append(el);

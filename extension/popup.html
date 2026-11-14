@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>YT Vision Notes</title>
@@ -21,21 +21,21 @@
 </head>
 <body>
   <h1>YT Vision Notes</h1>
-  <p id="state">讀取中…</p>
+  <p id="state">Loading…</p>
   <p class="muted" id="counts"></p>
   <div class="row">
-    <button id="auth" class="primary">登入 Google</button>
-    <button id="sync">立即同步</button>
+    <button id="auth" class="primary">Sign in with Google</button>
+    <button id="sync">Sync now</button>
   </div>
   <p id="err"></p>
-  <label for="web">知識庫網站網址（GitHub Pages）</label>
+  <label for="web">Knowledge base URL (GitHub Pages)</label>
   <div class="row">
-    <input id="web" type="url" placeholder="https://你的帳號.github.io/yt-vision-notes/">
+    <input id="web" type="url" placeholder="https://your-name.github.io/yt-vision-notes/">
   </div>
   <div class="row">
-    <button id="open">開啟知識庫</button>
+    <button id="open">Open knowledge base</button>
   </div>
-  <p class="muted">在 YouTube 播放器右下角點「筆記」圖示開啟白板。Alt+S 可快速擷取畫面；面板右上角可彈出成獨立視窗。</p>
+  <p class="muted">Click the notes icon at the bottom right of the YouTube player to open the board. Alt+S captures a frame; the panel can pop out into its own window.</p>
   <script src="popup.js"></script>
 </body>
 </html>

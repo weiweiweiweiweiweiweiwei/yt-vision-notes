@@ -13,10 +13,10 @@
       try {
         r = await chrome.runtime.sendMessage({ type, ...(data || {}) });
       } catch (e) {
-        if (/context invalidated/i.test(e.message || '')) throw new Error('擴充功能已更新，請重新整理此頁面');
+        if (/context invalidated/i.test(e.message || '')) throw new Error('The extension was updated. Reload this page');
         throw e;
       }
-      if (!r || !r.ok) throw new Error((r && r.error) || '擴充功能沒有回應');
+      if (!r || !r.ok) throw new Error((r && r.error) || 'The extension did not respond');
       return r;
     }
 

@@ -22,13 +22,13 @@
       let n = 0;
       (function wait() {
         if (window.google && google.accounts && google.accounts.oauth2) return res();
-        if (++n > 100) return rej(new Error('Google 登入元件載入失敗（請檢查網路或擋廣告外掛）'));
+        if (++n > 100) return rej(new Error('Google sign-in failed to load (check your network or ad blocker)'));
         setTimeout(wait, 100);
       })();
     });
   }
   async function requestToken(prompt) {
-    if (!clientId()) throw new Error('尚未設定 OAuth Client ID（請到 ⚙ 設定）');
+    if (!clientId()) throw new Error('OAuth Client ID is not set (open ⚙ Settings)');
     await gisReady();
     if (!tokenClient || tokenClient._cid !== clientId()) {
       const settle = (err, val) => { const w = tokenWaiters; tokenWaiters = []; w.forEach(([res, rej]) => (err ? rej(err) : res(val))); };
@@ -40,7 +40,7 @@
           localStorage.setItem('yvnToken', JSON.stringify(token));
           settle(null, token.value);
         },
-        error_callback: (e) => settle(new Error(e.type === 'popup_closed' ? '登入視窗已關閉' : e.type === 'popup_failed_to_open' ? '登入視窗被瀏覽器阻擋，請再按一次同步' : e.message || '登入失敗')),
+        error_callback: (e) => settle(new Error(e.type === 'popup_closed' ? 'The sign-in window was closed' : e.type === 'popup_failed_to_open' ? 'The browser blocked the sign-in window. Click sync again' : e.message || 'Sign-in failed')),
       });
       tokenClient._cid = clientId();
     }
@@ -60,11 +60,11 @@
   }
 
   // ---------- sync ----------
-  const syncBtn = el('button', { class: 'yb-hbtn app-sync', title: '與 Google Drive 同步', onclick: () => sync(true) }, el('i', { class: 'dot' }), el('span', {}, '登入'));
+  const syncBtn = el('button', { class: 'yb-hbtn app-sync', title: 'Sync with Google Drive', onclick: () => sync(true) }, el('i', { class: 'dot' }), el('span', {}, 'Sign in'));
   function renderSync() {
     syncBtn.querySelector('.dot').className = 'dot ' + (S.syncing ? 'busy' : S.error ? 'err' : tokenValid() ? 'ok' : '');
-    syncBtn.querySelector('span').textContent = S.syncing ? '同步中…' : S.error ? '同步失敗' : tokenValid() ? '已同步' : localStorage.getItem('yvnSignedIn') ? '重新連線' : '登入 Google';
-    syncBtn.title = S.error || '與 Google Drive 同步';
+    syncBtn.querySelector('span').textContent = S.syncing ? 'Syncing…' : S.error ? 'Sync failed' : tokenValid() ? 'Synced' : localStorage.getItem('yvnSignedIn') ? 'Reconnect' : 'Sign in with Google';
+    syncBtn.title = S.error || 'Sync with Google Drive';
   }
   async function sync(interactive) {
     if (S.syncing) return;
@@ -79,7 +79,7 @@
       view.reload();
     } catch (e) {
       console.error(e); S.error = e.message || String(e);
-      if (interactive) toast('同步失敗：' + S.error);
+      if (interactive) toast('Sync failed: ' + S.error);
     }
     S.syncing = false; renderSync();
   }
@@ -132,7 +132,7 @@
   // ---------- mini YouTube player for timestamps ----------
   const mini = $('#mini');
   function seek(video, ts) {
-    if (!video) return toast('這張卡片沒有對應的影片');
+    if (!video) return toast('This card has no video');
     $('#miniTitle').textContent = video.title || video.id;
     $('#miniOpen').href = `https://www.youtube.com/watch?v=${video.id}&t=${Math.floor(ts)}s`;
     $('#miniFrame').src = `https://www.youtube-nocookie.com/embed/${video.id}?autoplay=1&start=${Math.floor(ts)}&rel=0`;
@@ -147,11 +147,11 @@
     const sums = await store.summaries();
     const items = YVN.liveItems(b).sort((a, c) => a.y - c.y || a.x - c.x);
     const files = [];
-    const lines = [`# ${b.id === YVN.HOME ? '首頁' : b.title}`, ''];
+    const lines = [`# ${b.id === YVN.HOME ? 'Home' : b.title}`, ''];
     let missing = 0;
     for (const it of items) {
       if (it.type === 'note') {
-        if (it.video) lines.push(`> 總結：[${it.video.title}](https://www.youtube.com/watch?v=${it.video.id})`, '');
+        if (it.video) lines.push(`> Summary: [${it.video.title}](https://www.youtube.com/watch?v=${it.video.id})`, '');
         lines.push(it.text || '', '');
       } else if (it.image) {
         const blob = await store.getImageBlob(it.image, null, driveOrNull());
@@ -162,31 +162,31 @@
         if (it.text) lines.push(it.text);
         lines.push('');
       } else if (it.type === 'link') lines.push(`- [${it.title || it.url}](${it.url})`, '');
-      else if (it.type === 'board') lines.push(`- 📁 [[${(sums[it.boardId] || {}).title || '未命名'}]]`, '');
-      else if (it.type === 'column') lines.push(`## ${it.title || '欄'}`, '');
-      else if (it.type === 'color') lines.push(`- 色票 ${it.name || ''} \`${(it.hex || '').toUpperCase()}\``, '');
+      else if (it.type === 'board') lines.push(`- 📁 [[${(sums[it.boardId] || {}).title || 'Untitled'}]]`, '');
+      else if (it.type === 'column') lines.push(`## ${it.title || 'Column'}`, '');
+      else if (it.type === 'color') lines.push(`- Color ${it.name || ''} \`${(it.hex || '').toUpperCase()}\``, '');
       else if (it.type === 'heading') lines.push(`## ${it.text || ''}`, '');
       else if (it.type === 'table' && (it.rows || []).length) {
         const cell = (v) => String(v || '').replace(/\|/g, '\|').replace(/\n/g, ' ');
         const [head, ...body] = it.rows;
         lines.push(`| ${head.map(cell).join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...body.map((r) => `| ${r.map(cell).join(' | ')} |`), '');
-      } else if (it.type === 'doc') lines.push(`### ${it.title || '未命名文件'}`, '', it.text || '', '');
-      else if (it.type === 'video' && it.url) lines.push(`- 影片：[${it.title || it.url}](${it.url})`, '');
-      else if (it.type === 'map' && it.query) lines.push(`- 地圖：[${it.query}](https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.query)})`, '');
+      } else if (it.type === 'doc') lines.push(`### ${it.title || 'Untitled document'}`, '', it.text || '', '');
+      else if (it.type === 'video' && it.url) lines.push(`- Video: [${it.title || it.url}](${it.url})`, '');
+      else if (it.type === 'map' && it.query) lines.push(`- Map: [${it.query}](https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.query)})`, '');
       else if (it.file) {
         const blob = await store.getImageBlob(it.file, 'orig', driveOrNull());
         const name = `files/${it.file.id}-${String(it.file.name || 'file').replace(/[\/:*?"<>|]/g, '_')}`;
         if (blob) files.push({ name, data: blob }); else missing++;
-        lines.push(`- 檔案：[${it.file.name || '檔案'}](${encodeURI(name)})`, '');
-      } else if (it.type === 'sketch') lines.push('- （草圖）', '');
+        lines.push(`- File: [${it.file.name || 'File'}](${encodeURI(name)})`, '');
+      } else if (it.type === 'sketch') lines.push('- (sketch)', '');
     }
     files.unshift({ name: 'board.md', data: lines.join('\n') });
     const zip = await YVN.makeZip(files);
-    const safe = (b.id === YVN.HOME ? '首頁' : b.title || 'board').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+    const safe = (b.id === YVN.HOME ? 'Home' : b.title || 'board').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(zip); a.download = `${safe}.zip`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-    toast(missing ? `已匯出（有 ${missing} 張圖片尚未下載，請登入同步後重試）` : '已匯出 ZIP');
+    toast(missing ? `Exported (${missing} images not downloaded yet — sign in, sync and try again)` : 'Exported ZIP');
   }
 
   // ---------- settings ----------
@@ -201,20 +201,20 @@
       cid.value = clientId();
       cid.onchange = () => { localStorage.setItem('yvnClientId', cid.value.trim()); tokenClient = null; };
       dlg.replaceChildren(
-        el('h2', {}, '設定'),
+        el('h2', {}, 'Settings'),
         el('h3', {}, 'Google OAuth Client ID（Web application）'),
         cid,
-        el('p', { class: 'muted' }, '只存在這個瀏覽器。' + (tokenValid() ? '目前已登入。' : '')),
-        el('h3', {}, '操作方式'),
+        el('p', { class: 'muted' }, 'Stored only in this browser. ' + (tokenValid() ? 'Currently signed in.' : '')),
+        el('h3', {}, 'How to use'),
         el('ul', { class: 'help' },
-          el('li', {}, '滾輪、按住滑鼠中鍵拖曳、或按住空白鍵拖曳：移動畫布；Ctrl + 滾輪：縮放'),
-          el('li', {}, '在空白處用左鍵拖曳：框選多張卡片（按住 Shift 可加選）'),
-          el('li', {}, '雙擊空白處：新增筆記；雙擊卡片：編輯；雙擊截圖：開啟標註編輯器'),
-          el('li', {}, '把卡片拖到 Board 上：移進那個 Board'),
-          el('li', {}, '可直接貼上或拖入圖片、網址；Delete 刪除選取的卡片')),
+          el('li', {}, 'Wheel, middle-button drag or Space + drag: pan the board; Ctrl + wheel: zoom'),
+          el('li', {}, 'Left-drag on empty space: select cards (hold Shift to add)'),
+          el('li', {}, 'Double-click empty space: new note; double-click a card: edit; double-click a screenshot: annotate'),
+          el('li', {}, 'Drag cards onto a board card to move them into it; Alt + drag duplicates'),
+          el('li', {}, 'Paste or drop images and links; Delete removes the selected cards')),
         el('div', { class: 'actions' },
-          localStorage.getItem('yvnSignedIn') && el('button', { class: 'btn danger', onclick: signOut }, '登出 Google'),
-          el('button', { class: 'btn primary', onclick: () => dlg.close() }, '完成')));
+          localStorage.getItem('yvnSignedIn') && el('button', { class: 'btn danger', onclick: signOut }, 'Sign out of Google'),
+          el('button', { class: 'btn primary', onclick: () => dlg.close() }, 'Done')));
     };
     draw();
     if (!dlg.open) dlg.showModal();
@@ -236,9 +236,9 @@
     seek,
     toast,
     headerExtras: [
-      el('button', { class: 'yb-hbtn', title: '把這個 Board 匯出成 Markdown + 圖片 ZIP', onclick: exportZip }, '匯出'),
+      el('button', { class: 'yb-hbtn', title: 'Export this board as Markdown + images (ZIP)', onclick: exportZip }, 'Export'),
       syncBtn,
-      el('button', { class: 'yb-hbtn', title: '設定', 'aria-label': '設定', onclick: openSettings }, '⚙'),
+      el('button', { class: 'yb-hbtn', title: 'Settings', 'aria-label': 'Settings', onclick: openSettings }, '⚙'),
     ],
     onNavigate: (id) => {
       const want = id === YVN.HOME ? '#/' : `#/b/${encodeURIComponent(id)}`;

@@ -191,12 +191,12 @@
   YVN.fmtSize = (n) => (!n ? '' : n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB');
   YVN.friendlyTime = (ms) => {
     const d = Date.now() - (ms || 0), m = Math.floor(d / 60000);
-    if (m < 1) return '剛剛';
-    if (m < 60) return `${m} 分鐘前`;
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m} min ago`;
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h} 小時前`;
+    if (h < 24) return `${h} h ago`;
     const days = Math.floor(h / 24);
-    if (days < 7) return `${days} 天前`;
+    if (days < 7) return `${days} d ago`;
     const t = new Date(ms);
     return `${t.getFullYear()}/${t.getMonth() + 1}/${t.getDate()}`;
   };
