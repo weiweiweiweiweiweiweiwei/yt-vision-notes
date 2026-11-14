@@ -382,3 +382,18 @@ button.yb-playbadge:hover { background: #e5484d; transform: translate(-50%, -50%
 /* curved lines: middle handle bends the line */
 .yb-lines .yb-hmid { cursor: grab; }
 .yb-lines .yb-ldot { pointer-events: none; }
+
+/* ---------- to-do list ---------- */
+.yb-todobody { padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.yb-ttitle { font-weight: 700; font-size: 16px; margin-bottom: 6px; overflow-wrap: anywhere; }
+.yb-ttitle-in { border: 0; outline: none; background: transparent; color: var(--yb-fg); font-weight: 700; font-size: 16px !important; margin-bottom: 6px; padding: 0; }
+.yb-ttitle-in::placeholder { color: var(--yb-fg2); opacity: .6; }
+.yb-trow { display: flex; align-items: flex-start; gap: 12px; min-height: 28px; }
+.yb-tcb { flex: none; width: 18px; height: 18px; margin-top: 3px; padding: 0; border: 1.5px solid var(--yb-fg); border-radius: 4px; background: transparent; cursor: pointer; position: relative; opacity: .85; }
+.yb-tcb.on { background: var(--yb-fg2); border-color: var(--yb-fg2); }
+.yb-tcb.on::after { content: ""; position: absolute; left: 5px; top: 1px; width: 4px; height: 9px; border: solid var(--yb-card); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.yb-ttext { flex: 1; min-width: 0; font-size: 14px; line-height: 24px; overflow-wrap: anywhere; outline: none; }
+.yb-ttext[contenteditable] { cursor: text; user-select: text; -webkit-user-select: text; }
+.yb-ttext[contenteditable]:empty::before { content: attr(data-ph); color: var(--yb-fg2); opacity: .6; }
+.yb-tph { color: var(--yb-fg2); opacity: .6; }
+.yb-tdone .yb-ttext { text-decoration: line-through; color: var(--yb-fg2); }

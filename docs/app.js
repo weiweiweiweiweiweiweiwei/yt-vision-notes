@@ -164,6 +164,7 @@
       } else if (it.type === 'link') lines.push(`- [${it.title || it.url}](${it.url})`, '');
       else if (it.type === 'board') lines.push(`- 📁 [[${(sums[it.boardId] || {}).title || 'Untitled'}]]`, '');
       else if (it.type === 'column') lines.push(`## ${it.title || 'Column'}`, '');
+      else if (it.type === 'todo') lines.push(...(it.title ? [`**${it.title}**`] : []), ...(it.todos || []).map((t) => `- [${t.done ? 'x' : ' '}] ${t.text}`), '');
       else if (it.type === 'color') lines.push(`- Color ${it.name || ''} \`${(it.hex || '').toUpperCase()}\``, '');
       else if (it.type === 'heading') lines.push(`## ${it.text || ''}`, '');
       else if (it.type === 'table' && (it.rows || []).length) {

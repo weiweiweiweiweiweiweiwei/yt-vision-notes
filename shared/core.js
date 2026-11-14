@@ -164,7 +164,7 @@
   //   video = { id, title, channel }
   // =====================================================================================
   YVN.BOARD_COLORS = ['#e5484d', '#f76b15', '#f5a524', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#8b8d98'];
-  YVN.CARD_W = { note: 260, shot: 240, image: 240, board: 120, link: 240, column: 300, color: 160, comment: 280, heading: 420, table: 380, sketch: 300, video: 360, map: 320, file: 260, audio: 300, doc: 240 };
+  YVN.CARD_W = { note: 260, shot: 240, image: 240, board: 120, link: 240, column: 300, color: 160, comment: 280, todo: 300, heading: 420, table: 380, sketch: 300, video: 360, map: 320, file: 260, audio: 300, doc: 240 };
 
   YVN.emptyBoard = (id, title, parentId) => {
     const now = Date.now();
@@ -200,7 +200,7 @@
     const t = new Date(ms);
     return `${t.getFullYear()}/${t.getMonth() + 1}/${t.getDate()}`;
   };
-  YVN.itemText = (it) => [YVN.plainText(it.text), it.type === 'comment' ? (it.comments || []).map((c) => c.text).join(' ') : '', it.rows ? it.rows.flat().join(' ') : '', it.file && it.file.name, it.query, it.title, it.url, it.video && it.video.title, it.name, it.hex, it.label].filter(Boolean).join(' ');
+  YVN.itemText = (it) => [YVN.plainText(it.text), it.type === 'comment' ? (it.comments || []).map((c) => c.text).join(' ') : '', it.rows ? it.rows.flat().join(' ') : '', it.todos ? it.todos.map((t) => t.text).join(' ') : '', it.file && it.file.name, it.query, it.title, it.url, it.video && it.video.title, it.name, it.hex, it.label].filter(Boolean).join(' ');
 
   function mergeItem(win, lose) {
     const fa = win.file, fb = lose.file;
@@ -249,6 +249,7 @@
     else if (it.type === 'color') h = 160;
     else if (it.type === 'comment') h = 60 + (it.comments || []).length * 70;
     else if (it.type === 'heading') h = 56;
+    else if (it.type === 'todo') h = 40 + Math.max(1, (it.todos || []).length) * 34 + (it.title ? 36 : 0);
     else if (it.type === 'table') h = 40 + ((it.rows || []).length || 3) * 34;
     else if (it.type === 'sketch') h = Math.round(w * (it.sh || 225) / 300);
     else if (it.type === 'video' || it.type === 'map') h = Math.round(w * 9 / 16) + 40;

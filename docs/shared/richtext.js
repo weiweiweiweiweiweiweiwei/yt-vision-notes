@@ -161,6 +161,18 @@
     _key(e) {
       e.stopPropagation(); // keep board / YouTube shortcuts out while typing
       const mod = e.ctrlKey || e.metaKey;
+      if (e.key === 'Enter' && !e.shiftKey && !mod) {
+        const s0 = getSelection();
+        const from = s0.rangeCount ? closest(s0.anchorNode, 'li.yvn-task', this.el) : null;
+        if (from) setTimeout(() => {
+          const li = closest(getSelection().anchorNode, 'li', this.el);
+          if (!li || li === from || li.querySelector('input[type=checkbox]')) return;
+          li.classList.add('yvn-task');
+          const cb = document.createElement('input');
+          cb.type = 'checkbox'; cb.contentEditable = 'false';
+          li.prepend(cb, document.createTextNode(' '));
+        }, 0);
+      }
       if (e.key === 'Escape' || (e.key === 'Enter' && mod)) { e.preventDefault(); if (this.o.onDone) this.o.onDone(); return; }
       if (!mod) return;
       const k = e.key.toLowerCase();

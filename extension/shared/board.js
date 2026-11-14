@@ -80,7 +80,7 @@
   const host = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return url; } };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const snap = (v) => Math.round(v / 10) * 10;
-  const FREE_H = new Set(['note', 'comment', 'table', 'doc', 'column', 'link', 'file', 'audio', 'heading', 'color']);
+  const FREE_H = new Set(['todo', 'note', 'comment', 'table', 'doc', 'column', 'link', 'file', 'audio', 'heading', 'color']);
 
   class BoardView {
     constructor(root, api, opts) {
@@ -228,7 +228,7 @@
       if (!q) return;
       const res = await this.api.search(q);
       if (!res.length) { this.sList.append(el('li', { class: 'yb-snone' }, 'No matching notes')); return; }
-      const label = { note: 'Note', shot: 'Capture', image: 'Image', board: 'Board', link: 'Link', column: 'Column', line: 'Line', color: 'Color', comment: 'Comment', heading: 'Heading', table: 'Table', sketch: 'Sketch', video: 'Video', map: 'Map', audio: 'Audio', file: 'File', doc: 'Document', ink: 'Draw' };
+      const label = { note: 'Note', shot: 'Capture', image: 'Image', board: 'Board', link: 'Link', column: 'Column', line: 'Line', color: 'Color', comment: 'Comment', heading: 'Heading', table: 'Table', sketch: 'Sketch', video: 'Video', map: 'Map', audio: 'Audio', file: 'File', doc: 'Document', ink: 'Draw', todo: 'To-do' };
       for (const r of res) {
         const text = (r.text || '').replace(/\s+/g, ' ');
         this.sList.append(el('li', { tabindex: '0', onclick: () => { this.toggleSearch(false); this.open(r.type === 'board' && !r.itemId ? r.boardId : r.boardId, r.itemId); } },
@@ -494,6 +494,16 @@
           el('span', { class: 'yb-coltitle' + (it.title ? '' : ' yb-ph') }, it.title || 'Untitled column'),
           el('small', { class: 'yb-colcount' }, '')),
         el('div', { class: 'yb-colbody' }));
+      } else if (it.type === 'todo') {
+        const body = el('div', { class: 'yb-todobody' });
+        if (it.title) body.append(el('div', { class: 'yb-ttitle' }, it.title));
+        for (const t of it.todos || []) {
+          body.append(el('div', { class: 'yb-trow' + (t.done ? ' yb-tdone' : '') },
+            el('button', { class: 'yb-tcb' + (t.done ? ' on' : ''), dataset: { act: 'tcheck', t: t.id }, 'aria-label': t.done ? 'Mark as not done' : 'Mark as done' }),
+            el('div', { class: 'yb-ttext' }, t.text)));
+        }
+        if (!(it.todos || []).length) body.append(el('div', { class: 'yb-trow' }, el('span', { class: 'yb-tcb' }), el('div', { class: 'yb-ttext yb-tph' }, 'Add a task…')));
+        c.append(body);
       } else if (it.type === 'heading') {
         c.append(el('div', { class: 'yb-htext' + (it.text ? '' : ' yb-ph') }, it.text || 'Heading'));
       } else if (it.type === 'table') {
@@ -972,6 +982,10 @@
         case 'seek': return this._seek(it.video, it.ts);
         case 'video': return this._seek(it.video, 0);
         case 'creply': return this.startEdit(it.id, { mode: 'reply' });
+        case 'tcheck': {
+          const todos = (it.todos || []).map((t) => (t.id === act.dataset.t ? { ...t, done: !t.done } : t));
+          return this.m.patchItems(this.boardId, [{ id: it.id, todos }]).then(() => this.reload());
+        }
         case 'fold': return this.m.patchItems(this.boardId, [{ id: it.id, collapsed: !it.collapsed }]).then(() => this.reload());
         case 'play': return this._play(it, card);
         case 'download': return this._openFile(it);
@@ -1036,6 +1050,7 @@
       if (it.type === 'link') return t.closest('.yb-yt') ? window.open(it.url, '_blank', 'noopener') : this.startEdit(it.id);
       if (it.type === 'color') return this.startEdit(it.id);
       if (it.type === 'comment') return this.startEdit(it.id, { mode: 'reply' });
+      if (it.type === 'todo') { const row = t.closest('.yb-trow'); const rows = [...card.querySelectorAll('.yb-trow')]; return this.startEdit(it.id, { focusIndex: row ? rows.indexOf(row) : -1 }); }
       if (['heading', 'table', 'sketch', 'video', 'doc'].includes(it.type) || (it.type === 'map' && !it.query)) return this.startEdit(it.id);
       if (it.type === 'file') return this._openFile(it);
     }
@@ -1112,6 +1127,7 @@
       }
       if (!multi) {
         if (it.type === 'board') entries.push({ label: 'Open', icon: 'board', run: () => this.open(it.boardId) });
+        if (it.type === 'todo') entries.push(it.title ? { label: 'Remove title', icon: 'heading', run: async () => { await this.m.patchItems(this.boardId, [{ id: it.id, title: null }]); this.reload(); } } : { label: 'Add title', icon: 'heading', run: () => this.startEdit(it.id, { addTitle: true }) });
         if (it.type === 'map' && it.query) entries.push({ label: 'Change place', icon: 'map', run: () => this.startEdit(it.id) });
         if (it.type === 'shot' || it.type === 'image') entries.push({ label: 'Open annotation editor', icon: 'image', run: () => this.openEditor(it.id) });
         if (it.type === 'shot' && it.ts != null) entries.push({ label: 'Jump to video at ' + YVN.fmtTime(it.ts), icon: 'play', run: () => this._seek(it.video, it.ts) });
@@ -1148,6 +1164,7 @@
         inp.focus();
         return;
       }
+      if (it.type === 'todo') return this._todoEdit(it, c, opt || {});
       if (it.type === 'heading') {
         const inp = el('input', { class: 'yb-hinput', value: it.text || '', placeholder: 'Heading' });
         inp.value = it.text || '';
@@ -1444,7 +1461,7 @@
     async openTrash() {
       this._closeMenu();
       const list = await this.api.trash();
-      const label = { note: 'Note', shot: 'Capture', image: 'Image', board: 'Board', link: 'Link', column: 'Column', line: 'Line', color: 'Color', comment: 'Comment', heading: 'Heading', table: 'Table', sketch: 'Sketch', video: 'Video', map: 'Map', audio: 'Audio', file: 'File', doc: 'Document', ink: 'Draw' };
+      const label = { note: 'Note', shot: 'Capture', image: 'Image', board: 'Board', link: 'Link', column: 'Column', line: 'Line', color: 'Color', comment: 'Comment', heading: 'Heading', table: 'Table', sketch: 'Sketch', video: 'Video', map: 'Map', audio: 'Audio', file: 'File', doc: 'Document', ink: 'Draw', todo: 'To-do' };
       const rows = list.map((t) => {
         const it = t.item;
         const text = String(it.type === 'board' ? t.boardRefTitle || '' : YVN.itemText(it)).replace(/\s+/g, ' ');
@@ -1565,7 +1582,7 @@
         return this._addNote({ video, color: '#f5a524' });
       }
       if (act === 'note') return this._addNote({});
-      if (act === 'todo') return this._addNote({ text: '**To-do**\n- [ ] ', w: 240 });
+      if (act === 'todo') return this._addSimple({ type: 'todo', todos: [] });
       if (act === 'board') return this._addBoard();
       if (act === 'link') return this._addLink('');
       if (act === 'column') return this._addColumn();
@@ -1766,6 +1783,72 @@
       inp.addEventListener('pointerdown', (e) => e.stopPropagation());
       this._edit = { it, field: 'patch', get, empty };
       inp.focus(); inp.select && inp.select();
+    }
+
+    // ---------- to-do list ----------
+    _todoEdit(it, c, opt) {
+      const id = it.id;
+      const caretEnd = (n) => { n.focus(); const r = document.createRange(); r.selectNodeContents(n); r.collapse(false); const s2 = getSelection(); s2.removeAllRanges(); s2.addRange(r); };
+      const mkRow = (t) => {
+        const tx = el('div', { class: 'yb-ttext', contenteditable: 'plaintext-only', spellcheck: 'false', 'data-ph': 'Add a task…' }, t.text || '');
+        const row = el('div', { class: 'yb-trow' + (t.done ? ' yb-tdone' : ''), dataset: { tid: t.id || YVN.uid('t_') } });
+        const cb = el('button', { class: 'yb-tcb' + (t.done ? ' on' : ''), 'aria-label': 'Done', onmousedown: (e) => e.preventDefault(), onclick: () => { row.classList.toggle('yb-tdone'); cb.classList.toggle('on'); } });
+        row.append(cb, tx);
+        return row;
+      };
+      const list = el('div', { class: 'yb-tlist' });
+      const todos = (it.todos || []).length ? it.todos : [{ text: '', done: false }];
+      for (const t of todos) list.append(mkRow(t));
+      const showTitle = (it.title != null && it.title !== '') || opt.addTitle;
+      const title = showTitle ? el('input', { class: 'yb-ttitle-in', placeholder: 'Title', spellcheck: 'false' }) : null;
+      if (title) title.value = it.title || '';
+      const body = el('div', { class: 'yb-todobody' }, title, list);
+      c.querySelector('.yb-todobody').replaceWith(body);
+      const rows = () => [...list.querySelectorAll('.yb-trow')];
+      body.addEventListener('pointerdown', (e) => e.stopPropagation());
+      body.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Escape') { e.preventDefault(); this.commitEdit(); return; }
+        if (e.target === title) { if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); caretEnd(rows()[0].querySelector('.yb-ttext')); } return; }
+        const row = e.target.closest && e.target.closest('.yb-trow');
+        if (!row) return;
+        const tx = row.querySelector('.yb-ttext'), all = rows(), i = all.indexOf(row);
+        if (e.key === 'Enter' && !e.shiftKey) {
+          // Enter = a new checkbox below (text after the caret moves with it)
+          e.preventDefault();
+          const sel = getSelection();
+          let rest = '';
+          if (sel.rangeCount && tx.contains(sel.anchorNode)) {
+            const r = sel.getRangeAt(0).cloneRange(); r.setEnd(tx, tx.childNodes.length);
+            rest = r.toString(); r.deleteContents();
+          }
+          const nr = mkRow({ text: rest, done: false });
+          row.after(nr);
+          const nt = nr.querySelector('.yb-ttext'); nt.focus();
+          const r2 = document.createRange(); r2.setStart(nt, 0); r2.collapse(true); sel.removeAllRanges(); sel.addRange(r2);
+          this._renderLines();
+        } else if (e.key === 'Backspace' && !tx.textContent && all.length > 1) {
+          e.preventDefault();
+          row.remove();
+          caretEnd(all[Math.max(0, i - 1)].querySelector('.yb-ttext'));
+          this._renderLines();
+        } else if (e.key === 'ArrowUp' && i > 0) { e.preventDefault(); caretEnd(all[i - 1].querySelector('.yb-ttext')); }
+        else if (e.key === 'ArrowDown' && i < all.length - 1) { e.preventDefault(); caretEnd(all[i + 1].querySelector('.yb-ttext')); }
+      });
+      body.addEventListener('focusout', () => setTimeout(() => { if (this.editing === id && !c.contains(document.activeElement)) this.commitEdit(); }, 200));
+      this._edit = {
+        it, field: 'patch',
+        get: () => ({
+          todos: rows().map((r) => ({ id: r.dataset.tid, text: r.querySelector('.yb-ttext').textContent.replace(/\s+/g, ' ').trim(), done: r.classList.contains('yb-tdone') })).filter((t) => t.text),
+          title: title ? title.value.trim() || null : it.title || null,
+        }),
+        empty: (v) => !v.todos.length && !v.title,
+      };
+      if (opt.addTitle && title) title.focus();
+      else {
+        const all = rows();
+        caretEnd(all[opt.focusIndex >= 0 && opt.focusIndex < all.length ? opt.focusIndex : all.length - 1].querySelector('.yb-ttext'));
+      }
     }
 
     // ---------- table ----------
