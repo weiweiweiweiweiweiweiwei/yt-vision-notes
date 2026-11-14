@@ -80,6 +80,7 @@
   const host = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return url; } };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const snap = (v) => Math.round(v / 10) * 10;
+  const GRAB = { x: 24, y: 18 }; // where the pointer holds a card dragged out of the toolbar
   const FREE_H = new Set(['todo', 'note', 'comment', 'table', 'doc', 'column', 'link', 'file', 'audio', 'heading', 'color']);
 
   class BoardView {
@@ -1543,12 +1544,13 @@
         const mv = (ev) => {
           if (!ghost && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
           if (!ghost) {
-            ghost = el('div', { class: 'yb-toolghost' }, btn.querySelector('.yb-ic').cloneNode(true), el('span', {}, btn.textContent));
+            // the ghost is the real card in its starting state, at the board's zoom
+            ghost = this._toolPreview(act) || el('div', { class: 'yb-toolghost' }, btn.querySelector('.yb-ic').cloneNode(true), el('span', {}, btn.textContent));
             this.root.append(ghost);
             if (this.flyout) this.flyout.hidden = true;
           }
           const rr = this.root.getBoundingClientRect();
-          ghost.style.left = ev.clientX - rr.left - 20 + 'px'; ghost.style.top = ev.clientY - rr.top - 16 + 'px';
+          ghost.style.left = ev.clientX - rr.left - GRAB.x + 'px'; ghost.style.top = ev.clientY - rr.top - GRAB.y + 'px';
           const r = this.vp.getBoundingClientRect();
           ghost.classList.toggle('yb-over', ev.clientX > r.left && ev.clientX < r.right && ev.clientY > r.top && ev.clientY < r.bottom);
         };
@@ -1560,12 +1562,64 @@
           setTimeout(() => { this._toolDragged = false; }, 0);
           const r = this.vp.getBoundingClientRect();
           if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return;
-          const pt = this._toBoard(ev.clientX, ev.clientY);
-          this._dropAt = { x: snap(pt.x - 20), y: snap(pt.y - 16) };
+          // drop exactly where the preview was
+          const pt = this._toBoard(ev.clientX - GRAB.x, ev.clientY - GRAB.y);
+          this._dropAt = { x: Math.round(pt.x), y: Math.round(pt.y) };
           this.tool(act).finally(() => { this._dropAt = null; });
         };
         window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
       });
+    }
+
+    /** A non-interactive copy of the card a tool creates, used while dragging it out of the toolbar. */
+    _toolPreview(act) {
+      const z = this.view.z;
+      if (act === 'line') {
+        const NS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('viewBox', '-8 -8 256 256');
+        svg.setAttribute('width', 256 * z); svg.setAttribute('height', 256 * z);
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('d', 'M0,240 L229,11'); path.setAttribute('class', 'yb-vis'); path.setAttribute('style', 'stroke:var(--yb-linec);stroke-width:2.5;fill:none;stroke-linecap:round');
+        const head = document.createElementNS(NS, 'path');
+        head.setAttribute('d', 'M240,0 L222.4,8.2 L231.8,17.6 Z'); head.setAttribute('style', 'fill:var(--yb-linec)');
+        svg.append(path, head);
+        const wrap = el('div', { class: 'yb-preview yb-pline', style: `margin:${-8 * z}px 0 0 ${-8 * z}px` });
+        wrap.append(svg);
+        return wrap;
+      }
+      const P = {
+        note: { type: 'note', text: '' },
+        summary: { type: 'note', text: '', color: '#f5a524' },
+        todo: { type: 'todo', todos: [] },
+        link: { type: 'link', url: '', title: '' },
+        board: { type: 'board', boardId: '__preview' },
+        column: { type: 'column', title: '' },
+        comment: { type: 'comment', comments: [] },
+        table: { type: 'table', rows: [['', '', ''], ['', '', ''], ['', '', '']] },
+        sketch: { type: 'sketch', strokes: [], sh: 225 },
+        color: { type: 'color', hex: (this._nextHex = ['#e5484d', '#f76b15', '#f5a524', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f'][Math.floor(Math.random() * 8)]), name: '' },
+        heading: { type: 'heading', text: '' },
+        video: { type: 'video', url: '' },
+        map: { type: 'map', query: '' },
+        doc: { type: 'doc', title: '', text: '' },
+      }[act];
+      let c;
+      if (act === 'shot') {
+        c = el('div', { class: 'yb-item yb-shot' }, el('div', { class: 'yb-imgwrap', style: 'aspect-ratio:16/9' }));
+        c.style.width = YVN.CARD_W.shot + 'px';
+      } else if (P) {
+        const it = { id: '__preview', x: 0, y: 0, ...P };
+        const keep = this.sums.__preview;
+        this.sums.__preview = { id: '__preview', title: 'New Board', color: YVN.BOARD_COLORS[5], itemCount: 0 };
+        c = this._card(it);
+        if (keep) this.sums.__preview = keep; else delete this.sums.__preview;
+        c.style.width = (YVN.CARD_W[it.type] || 260) + 'px';
+        if (it.type === 'column') { const b = c.querySelector('.yb-colbody'); if (b) b.classList.add('yb-colempty'); const n = c.querySelector('.yb-colcount'); if (n) n.textContent = '0 cards'; }
+      } else return null;
+      c.classList.add('yb-preview');
+      c.style.transform = `scale(${z})`;
+      return c;
     }
 
     _slot(w, h, at) {
@@ -2082,8 +2136,9 @@
     // ---------- color swatches ----------
     async _addColor() {
       const palette = ['#e5484d', '#f76b15', '#f5a524', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f'];
+      const nextHex = this._dropAt ? this._nextHex : null; this._nextHex = null; // keep the color shown while dragging
       const p = this._slot(YVN.CARD_W.color, 160);
-      const it = await this.m.putItem(this.boardId, { type: 'color', hex: palette[Math.floor(Math.random() * palette.length)], name: '', w: YVN.CARD_W.color, ...p });
+      const it = await this.m.putItem(this.boardId, { type: 'color', hex: nextHex || palette[Math.floor(Math.random() * palette.length)], name: '', w: YVN.CARD_W.color, ...p });
       await this.reload();
       this.focusItem(it.id, false);
       this._fresh = it.id;

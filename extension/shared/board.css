@@ -397,3 +397,8 @@ button.yb-playbadge:hover { background: #e5484d; transform: translate(-50%, -50%
 .yb-ttext[contenteditable]:empty::before { content: attr(data-ph); color: var(--yb-fg2); opacity: .6; }
 .yb-tph { color: var(--yb-fg2); opacity: .6; }
 .yb-tdone .yb-ttext { text-decoration: line-through; color: var(--yb-fg2); }
+
+/* card preview while dragging a tool out of the toolbar */
+.yb-preview { position: absolute !important; z-index: 60; pointer-events: none !important; transform-origin: 0 0; box-shadow: 0 14px 34px rgba(0, 0, 0, .4) !important; }
+.yb-preview.yb-pline { box-shadow: none !important; }
+.yb-preview .yb-rs, .yb-preview .yb-colfold { display: none; }
