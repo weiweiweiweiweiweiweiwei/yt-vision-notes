@@ -243,7 +243,7 @@
 .yb-swedit .yb-input { height: 30px; font-size: 13px; }
 
 /* ---------- lines ---------- */
-.yb-lines { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+.yb-lines { position: absolute; left: -50000px; top: -50000px; width: 100000px; height: 100000px; overflow: visible; pointer-events: none; }
 .yb-lines .yb-hit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; cursor: pointer; }
 .yb-lines .yb-vis { fill: none; stroke-width: 2.5; stroke-linecap: round; }
 .yb-lines .yb-lsel .yb-vis { stroke-width: 2.5; }

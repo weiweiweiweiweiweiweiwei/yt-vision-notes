@@ -395,11 +395,15 @@
       const live = YVN.liveItems(this.board);
       this._colIds = new Set(live.filter((i) => i.type === 'column').map((i) => i.id));
       if (!this.svg) {
-        this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        this.svg.setAttribute('class', 'yb-lines');
+        this.svgRoot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        this.svgRoot.setAttribute('class', 'yb-lines');
+        // big canvas offset by -50000 so lines anywhere on the board can be clicked; content is shifted back
+        this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        this.svg.setAttribute('transform', 'translate(50000 50000)');
+        this.svgRoot.append(this.svg);
         this.lbls = el('div', { class: 'yb-llabels' });
       }
-      if (this.layer.firstChild !== this.svg) this.layer.prepend(this.svg, this.lbls);
+      if (this.layer.firstChild !== this.svgRoot) this.layer.prepend(this.svgRoot, this.lbls);
       const keep = new Set();
       const kids = new Map();
       for (const it of live) {
@@ -672,10 +676,13 @@
         const h = t.closest('.yb-hnd');
         this.gesture = { kind: 'line-end', start, id: h.dataset.line, end: h.dataset.end };
       } else if (t.closest('.yb-line, .yb-llabel, .yb-inkg')) {
-        const id = t.closest('.yb-line, .yb-llabel, .yb-inkg').dataset.id;
+        const hitEl = t.closest('.yb-line, .yb-llabel, .yb-inkg');
+        const id = hitEl.dataset.id;
         if (e.shiftKey || e.ctrlKey || e.metaKey) { this.sel.has(id) ? this.sel.delete(id) : this.sel.add(id); } else this.sel = new Set([id]);
         this._paintSel();
-        return;
+        if (hitEl.classList.contains('yb-inkg') || !this.sel.has(id)) return;
+        e.preventDefault();
+        this.gesture = { kind: 'line-move', start, id, moved: false };
       }
       if (this.gesture && /^(line|pan|ink|erase)/.test(this.gesture.kind)) { /* handled by the window listeners below */ }
       else if (t.closest('[data-act], a, .yb-md input')) return;
@@ -738,6 +745,11 @@
         const hit = document.elementFromPoint(e.clientX, e.clientY);
         const g = hit && hit.closest && hit.closest('.yb-inkg');
         if (g && !gst.gone.has(g.dataset.id)) { gst.gone.add(g.dataset.id); g.style.display = 'none'; }
+      } else if (gst.kind === 'line-move') {
+        if (!gst.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+        gst.moved = true;
+        gst.d = { x: dx / this.view.z, y: dy / this.view.z };
+        this._renderLines();
       } else if (gst.kind === 'line-new' || gst.kind === 'line-end') {
         gst.pt = this._toBoard(e.clientX, e.clientY);
         gst.moved = gst.moved || Math.abs(dx) + Math.abs(dy) > 4;
@@ -825,6 +837,16 @@
         await this.reload();
         this.sel = new Set([it.id]); this._paintSel();
         return;
+      }
+      if (gst.kind === 'line-move') {
+        const ln = this.board.items.find((i) => i.id === gst.id);
+        if (!gst.moved || !ln) return;
+        // the whole line moves; ends that were attached to cards become free points at their new place
+        const G = this._lineGeom(this._endBox(ln.from), this._endBox(ln.to), ln.bend);
+        const ddx = (e.clientX - gst.start.x) / this.view.z, ddy = (e.clientY - gst.start.y) / this.view.z;
+        const from = { x: Math.round(G.pa.x + ddx), y: Math.round(G.pa.y + ddy) }, to = { x: Math.round(G.pb.x + ddx), y: Math.round(G.pb.y + ddy) };
+        await this.m.patchItems(this.boardId, [{ id: ln.id, from, to }]);
+        return this.reload();
       }
       if (gst.kind === 'line-end') {
         const ln = this.board.items.find((i) => i.id === gst.id);
@@ -1489,7 +1511,7 @@
     }
     /** Press a toolbar button and drag it onto the board to create the card where it is dropped. */
     _dragTool(btn, act) {
-      if (['line', 'draw', 'upload', 'upload_image', 'audio'].includes(act)) return; // these start a mode or a file picker
+      if (['draw', 'upload', 'upload_image', 'audio'].includes(act)) return; // these start a mode or a file picker
       btn.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
         const sx = e.clientX, sy = e.clientY;
@@ -1558,6 +1580,13 @@
       if (act === 'audio') return this._pickFiles('audio/*', 'audio');
       if (act === 'upload_image') return this._pickFiles('image/*', 'image');
       if (act === 'draw') return this.setDraw(!this._draw);
+      if (act === 'line' && this._dropAt) {
+        const d = this._dropAt; this._dropAt = null;
+        const it = await this.m.putItem(this.boardId, { type: 'line', from: { x: d.x, y: d.y + 150 }, to: { x: d.x + 150, y: d.y }, arrow: 'end', color: null, label: '', bend: { a: 0, p: 0.18 } });
+        await this.reload();
+        this.sel = new Set([it.id]); this._paintSel();
+        return;
+      }
       if (act === 'line') {
         this._lineMode = true; this.vp.classList.add('yb-linemode');
         this.toast('Drag from a card (or empty space) to another card to connect them. Esc to cancel');
@@ -2027,7 +2056,7 @@
       if (!P && bend && (bend.a || bend.p)) P = { x: mid.x + (bend.a * ux + bend.p * nx) * L, y: mid.y + (bend.a * uy + bend.p * ny) * L };
       if (!P) {
         const pa = this._clip(A, cb), pb = this._clip(B, ca);
-        return { pa, pb, d: `M${pa.x},${pa.y} L${pb.x},${pb.y}`, ta: pb, tb: pa, mid: { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 } };
+        return { pa, pb, d: `M${pa.x},${pa.y} L${pb.x},${pb.y}`, ta: pa, tb: pb, mid: { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 } };
       }
       const C = { x: 2 * P.x - mid.x, y: 2 * P.y - mid.y }; // control point so the curve passes through P
       const pa = this._clip(A, C), pb = this._clip(B, C);
@@ -2085,6 +2114,10 @@
       for (const ln of YVN.liveItems(this.board)) {
         if (ln.type !== 'line') continue;
         let A = this._endBox(ln.from), B = this._endBox(ln.to), midPt = null;
+        if (gst && gst.kind === 'line-move' && gst.id === ln.id && gst.d) {
+          const G0 = this._lineGeom(A, B, ln.bend);
+          A = { x: G0.pa.x + gst.d.x, y: G0.pa.y + gst.d.y }; B = { x: G0.pb.x + gst.d.x, y: G0.pb.y + gst.d.y };
+        }
         if (gst && gst.kind === 'line-end' && gst.id === ln.id && gst.pt) {
           if (gst.end === 'mid') midPt = gst.pt;
           else if (gst.end === 'from') A = gst.pt; else B = gst.pt;
