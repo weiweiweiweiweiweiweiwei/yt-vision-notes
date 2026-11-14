@@ -38,8 +38,6 @@
 .yb-zoom { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 44px; }
 .yb-rename { height: 26px; width: 160px; }
 
-.yb-recent { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--yb-line); overflow-x: auto; scrollbar-width: thin; background: var(--yb-head); }
-.yb-recent small { color: var(--yb-fg2); white-space: nowrap; font-size: 12px; }
 .yb-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--yb-line); border-radius: 14px; background: var(--yb-card); white-space: nowrap; font-size: 13px; }
 .yb-chip:hover { border-color: var(--yb-accent); }
 
@@ -153,6 +151,8 @@
 .yb-mi { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--yb-fg) !important; text-align: left; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .yb-mi .yb-ic { width: 16px; color: var(--yb-fg2); }
 .yb-mi:hover { background: var(--yb-raised); }
+.yb-mh { padding: 8px 10px 6px; font-size: 14px; font-weight: 700; color: var(--yb-fg); white-space: nowrap; }
+.yb-vp:focus-visible { outline: none; } /* the canvas takes focus when a board opens; no focus ring around it */
 .yb-danger { color: #e5484d !important; }
 .yb-menu hr { border: 0; border-top: 1px solid var(--yb-line); margin: 4px 0; }
 .yb-colors { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 8px; }

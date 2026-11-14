@@ -140,54 +140,69 @@
   }
   $('#miniClose').onclick = () => { mini.hidden = true; $('#miniFrame').src = 'about:blank'; };
 
-  // ---------- export current board as Markdown + images ----------
-  async function exportZip() {
-    const b = await store.getBoard(view.boardId);
-    if (!b) return;
-    const sums = await store.summaries();
-    const items = YVN.liveItems(b).sort((a, c) => a.y - c.y || a.x - c.x);
-    const files = [];
-    const lines = [`# ${b.id === YVN.HOME ? 'Home' : b.title}`, ''];
-    let missing = 0;
-    for (const it of items) {
-      if (it.type === 'note') {
-        if (it.video) lines.push(`> Summary: [${it.video.title}](https://www.youtube.com/watch?v=${it.video.id})`, '');
-        lines.push(it.text || '', '');
-      } else if (it.image) {
-        const blob = await store.getImageBlob(it.image, null, driveOrNull());
-        const name = `images/${it.image.id}.webp`;
-        if (blob) files.push({ name, data: blob }); else missing++;
-        lines.push(`![](${name})`);
-        if (it.type === 'shot' && it.video) lines.push(`[${YVN.fmtTime(it.ts)}](https://www.youtube.com/watch?v=${it.video.id}&t=${Math.floor(it.ts || 0)}s) ${it.video.title}`);
-        if (it.text) lines.push(it.text);
-        lines.push('');
-      } else if (it.type === 'link') lines.push(`- [${it.title || it.url}](${it.url})`, '');
-      else if (it.type === 'board') lines.push(`- 📁 [[${(sums[it.boardId] || {}).title || 'Untitled'}]]`, '');
-      else if (it.type === 'column') lines.push(`## ${it.title || 'Column'}`, '');
-      else if (it.type === 'todo') lines.push(...(it.title ? [`**${it.title}**`] : []), ...(it.todos || []).map((t) => `- [${t.done ? 'x' : ' '}] ${t.text}`), '');
-      else if (it.type === 'color') lines.push(`- Color ${it.name || ''} \`${(it.hex || '').toUpperCase()}\``, '');
-      else if (it.type === 'heading') lines.push(`## ${it.text || ''}`, '');
-      else if (it.type === 'table' && (it.rows || []).length) {
-        const cell = (v) => String(v || '').replace(/\|/g, '\|').replace(/\n/g, ' ');
-        const [head, ...body] = it.rows;
-        lines.push(`| ${head.map(cell).join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...body.map((r) => `| ${r.map(cell).join(' | ')} |`), '');
-      } else if (it.type === 'doc') lines.push(`### ${it.title || 'Untitled document'}`, '', it.text || '', '');
-      else if (it.type === 'video' && it.url) lines.push(`- Video: [${it.title || it.url}](${it.url})`, '');
-      else if (it.type === 'map' && it.query) lines.push(`- Map: [${it.query}](https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.query)})`, '');
-      else if (it.file) {
-        const blob = await store.getImageBlob(it.file, 'orig', driveOrNull());
-        const name = `files/${it.file.id}-${String(it.file.name || 'file').replace(/[\/:*?"<>|]/g, '_')}`;
-        if (blob) files.push({ name, data: blob }); else missing++;
-        lines.push(`- File: [${it.file.name || 'File'}](${encodeURI(name)})`, '');
-      } else if (it.type === 'sketch') lines.push('- (sketch)', '');
+  // ---------- export the current board layout as PDF / PNG ----------
+  let h2iLoad = null;
+  const loadH2I = () => h2iLoad || (h2iLoad = new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'vendor/html-to-image.js';
+    sc.onload = () => res(window.htmlToImage);
+    sc.onerror = () => { h2iLoad = null; rej(new Error('Could not load the exporter')); };
+    document.head.append(sc);
+  }));
+  const toBlob = (canvas, type, q) => new Promise((res) => canvas.toBlob(res, type, q));
+  /** A one-page PDF holding a single JPEG, page sized to the board (1 board px = 0.75 pt, max 200 in). */
+  async function jpegPdf(jpeg, wPx, hPx, imgW, imgH) {
+    const k = Math.min(0.75, 14400 / Math.max(wPx, hPx));
+    const pw = +(wPx * k).toFixed(2), ph = +(hPx * k).toFixed(2);
+    const enc = new TextEncoder();
+    const img = new Uint8Array(await jpeg.arrayBuffer());
+    const content = `q ${pw} 0 0 ${ph} 0 0 cm /Im0 Do Q`;
+    const objs = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw} ${ph}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`,
+      [`<< /Type /XObject /Subtype /Image /Width ${imgW} /Height ${imgH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`, img, '\nendstream'],
+      `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    ];
+    const parts = [new Uint8Array([...enc.encode('%PDF-1.4\n%'), 0xe2, 0xe3, 0xcf, 0xd3, 10])];
+    let pos = parts[0].length;
+    const offs = [];
+    objs.forEach((o, i) => {
+      offs.push(pos);
+      for (const p of [`${i + 1} 0 obj\n`, ...[].concat(o), '\nendobj\n']) { const u = typeof p === 'string' ? enc.encode(p) : p; parts.push(u); pos += u.length; }
+    });
+    const xref = `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offs.map((o) => String(o).padStart(10, '0') + ' 00000 n \n').join('')}trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${pos}\n%%EOF\n`;
+    parts.push(enc.encode(xref));
+    return new Blob(parts, { type: 'application/pdf' });
+  }
+  async function exportBoard(kind) {
+    toast('Exporting…');
+    try {
+      const h2i = await loadH2I();
+      const out = await view.renderCanvas(h2i, kind === 'pdf' ? 1 : kind === 'pdfhq' ? 3 : 2);
+      if (!out) return toast('This board is empty');
+      const { canvas, width, height } = out;
+      const blob = kind === 'png'
+        ? await toBlob(canvas, 'image/png')
+        : await jpegPdf(await toBlob(canvas, 'image/jpeg', kind === 'pdf' ? 0.8 : 0.95), width, height, canvas.width, canvas.height);
+      const b = await store.getBoard(view.boardId);
+      const safe = (!b || b.id === YVN.HOME ? 'Home' : b.title || 'board').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = `${safe}.${kind === 'png' ? 'png' : 'pdf'}`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+      toast('Exported');
+    } catch (e) {
+      console.error(e);
+      toast('Export failed: ' + (e.message || e));
     }
-    files.unshift({ name: 'board.md', data: lines.join('\n') });
-    const zip = await YVN.makeZip(files);
-    const safe = (b.id === YVN.HOME ? 'Home' : b.title || 'board').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(zip); a.download = `${safe}.zip`; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-    toast(missing ? `Exported (${missing} images not downloaded yet — sign in, sync and try again)` : 'Exported ZIP');
+  }
+  function exportMenu(e) {
+    view._menuAt(e.currentTarget, [
+      { heading: 'Export the current board layout' },
+      { label: 'PDF standard (small file size)', icon: 'pdf', run: () => exportBoard('pdf') },
+      { label: 'PDF high quality (large file size)', icon: 'pdf', run: () => exportBoard('pdfhq') },
+      { label: 'PNG image', icon: 'png', run: () => exportBoard('png') },
+    ]);
   }
 
   // ---------- settings ----------
@@ -237,7 +252,7 @@
     seek,
     toast,
     headerExtras: [
-      el('button', { class: 'yb-hbtn', title: 'Export this board as Markdown + images (ZIP)', onclick: exportZip }, 'Export'),
+      el('button', { class: 'yb-hbtn', onclick: exportMenu }, 'Export'),
       syncBtn,
       el('button', { class: 'yb-hbtn', title: 'Settings', 'aria-label': 'Settings', onclick: openSettings }, '⚙'),
     ],

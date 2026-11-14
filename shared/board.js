@@ -13,7 +13,7 @@
  * api (all async): getBoard(id), summaries(), createBoard(parentId,{title,color,x,y}), updateBoard(id,patch),
  *   putItem(boardId,item,origDataURL?), patchItems(boardId,patches), deleteItems(boardId,ids),
  *   moveItems(from,to,ids,positions), getImage(boardId,item,which) → url, saveImageEdit(boardId,itemId,edits,blob),
- *   search(q), recent(), touchRecent(id), onChange(fn(boardId|null)) → unsubscribe
+ *   search(q), onChange(fn(boardId|null)) → unsubscribe
  */
 (function (g) {
   'use strict';
@@ -75,6 +75,8 @@
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     unlock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+    pdf: '<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/><rect x="3" y="11" width="9" height="5" rx="1" fill="#e5484d" stroke="none"/>',
+    png: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m4 19 6-6 4 4 2-2 4 4" stroke="#30a46c"/><circle cx="16" cy="9" r="2" fill="#f5a524" stroke="#f5a524"/>',
   };
   const icon = (name, size) => el('span', { class: 'yb-ic', 'aria-hidden': 'true', html: `<svg viewBox="0 0 24 24" width="${size || 18}" height="${size || 18}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>` });
   const ytId = (url) => { const m = /(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/)([\w-]{11})/.exec(url || ''); return m ? m[1] : null; };
@@ -131,7 +133,6 @@
         this.zoomLbl,
         this.mode !== 'panel' && el('button', { class: 'yb-hbtn', title: 'Zoom in', 'aria-label': 'Zoom in', onclick: () => this.zoomBy(1.2) }, icon('plus', 16)),
         ...(this.o.headerExtras || []));
-      this.recentRow = el('div', { class: 'yb-recent', hidden: true });
       this.layer = el('div', { class: 'yb-layer' });
       this.marquee = el('div', { class: 'yb-marquee', hidden: true });
       this.empty = el('div', { class: 'yb-empty', hidden: true });
@@ -201,7 +202,7 @@
         this.side.addEventListener('focusout', hide);
         this._hideSide = hide;
         toolbar = this.side;
-        r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, this.vp, hot, this.side));
+        r.append(this.head, el('div', { class: 'yb-body' }, this.vp, hot, this.side));
       } else {
         this.flyout = el('div', { class: 'yb-flyout', hidden: true },
           ...MORE.map((k) => { const b = el('button', { class: 'yb-tool', onclick: () => { if (this._toolDragged) { this._toolDragged = false; return; } this.flyout.hidden = true; this.tool(k); } }, icon(T[k][0], 24), el('span', {}, T[k][1])); this._dragTool(b, k); return b; }));
@@ -213,7 +214,7 @@
         } }, el('span', { class: 'yb-dots' }, icon('more', 20)));
         toolbar = el('div', { class: 'yb-tools' }, MAIN.map(btn), moreBtn, el('hr', { class: 'yb-tsep' }), LOWER.map(btn),
           el('button', { class: 'yb-tool yb-trashbtn', onclick: () => this.openTrash() }, icon('trash', 20), el('span', {}, 'Trash')));
-        r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, toolbar, this.vp), this.flyout);
+        r.append(this.head, el('div', { class: 'yb-body' }, toolbar, this.vp), this.flyout);
       }
       this.drawBar = this._buildDrawBar();
       r.append(this.drawBar);
@@ -273,7 +274,6 @@
       this.view = this._loadView(this.boardId);
       await this.reload();
       if (!this.board) return this.open(HOME);
-      this.api.touchRecent && this.api.touchRecent(this.boardId);
       if (this.o.onNavigate) this.o.onNavigate(this.boardId);
       if (focusItemId) this.focusItem(focusItemId);
       this.vp.focus({ preventScroll: true });
@@ -286,7 +286,6 @@
       this.board = board && !board.deleted ? board : null; this.sums = sums || {};
       if (!this.board) return;
       this._renderCrumbs();
-      await this._renderRecent();
       this._renderItems();
       this._applyView();
     }
@@ -321,18 +320,6 @@
         this.crumbs.append(b);
       });
       requestAnimationFrame(() => { this.crumbs.scrollLeft = this.crumbs.scrollWidth; });
-    }
-
-    async _renderRecent() {
-      const show = this.boardId === HOME && this.api.recent;
-      this.recentRow.hidden = true;
-      if (!show) return;
-      const ids = (await this.api.recent()).filter((id) => this.sums[id] && !this.sums[id].deleted).slice(0, 8);
-      if (!ids.length) return;
-      this.recentRow.replaceChildren(el('small', {}, 'Recent'),
-        ...ids.map((id) => el('button', { class: 'yb-chip', onclick: () => this.open(id) },
-          el('i', { class: 'yb-cdot', style: `background:${this.sums[id].color}` }), this.sums[id].title || 'Untitled')));
-      this.recentRow.hidden = false;
     }
 
     // ---------- view (pan / zoom) ----------
@@ -375,6 +362,39 @@
     }
     _inCol(it) { return !!(it && it.col && this._colIds && this._colIds.has(it.col)); }
     /** Free-floating cards (not lines, not cards stacked inside a column). */
+    /**
+     * Draw everything on this board (cards, lines, ink) onto a canvas, cropped to the content.
+     * h2i is the html-to-image library; scale is the pixel ratio (capped to what browsers can hold).
+     */
+    async renderCanvas(h2i, scale) {
+      if (this.editing) await this.commitEdit();
+      this._closeMenu(); this.sel.clear(); this._paintSel();
+      const z = this.view.z, lr = this.layer.getBoundingClientRect();
+      let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+      const add = (a, b, c, d) => { x1 = Math.min(x1, a); y1 = Math.min(y1, b); x2 = Math.max(x2, c); y2 = Math.max(y2, d); };
+      for (const e of this.layer.children) {
+        if (e === this.svgRoot) {
+          const g = this.svg && this.svg.getBBox && this.svg.getBBox();
+          if (g && (g.width || g.height)) add(g.x, g.y, g.x + g.width, g.y + g.height);
+          continue;
+        }
+        const r = e.getBoundingClientRect();
+        if (r.width || r.height) add((r.left - lr.left) / z, (r.top - lr.top) / z, (r.right - lr.left) / z, (r.bottom - lr.top) / z);
+      }
+      if (x1 === Infinity) return null;
+      const pad = 40, W = Math.ceil(x2 - x1 + pad * 2), H = Math.ceil(y2 - y1 + pad * 2);
+      const ratio = Math.max(0.1, Math.min(scale, 16000 / W, 16000 / H, Math.sqrt(120e6 / (W * H))));
+      let bg = 'rgba(0, 0, 0, 0)';
+      for (let n = this.vp; n && /rgba(.*, 0)|transparent/.test(bg); n = n.parentElement) bg = getComputedStyle(n).backgroundColor;
+      if (/rgba(.*, 0)|transparent/.test(bg)) bg = '#ffffff';
+      const canvas = await h2i.toCanvas(this.layer, {
+        width: W, height: H, pixelRatio: ratio, backgroundColor: bg, skipFonts: true,
+        imagePlaceholder: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+        style: { transform: `translate(${pad - x1}px, ${pad - y1}px)`, left: '0', top: '0', width: W + 'px', height: H + 'px' },
+        filter: (n) => n.tagName !== 'IFRAME',
+      });
+      return { canvas, width: W, height: H };
+    }
     _cards() { return YVN.liveItems(this.board).filter((i) => i.type !== 'line' && i.type !== 'ink' && !this._inCol(i)); }
     fit() {
       const items = this._cards();
@@ -1121,6 +1141,7 @@
       this.menu.replaceChildren(...entries.filter(Boolean).map((m) => m.colors
         ? el('div', { class: 'yb-colors' }, ...m.colors.map((c) => el('button', { class: 'yb-swbtn' + (c ? '' : ' yb-nocolor'), title: c || 'No color', 'aria-label': c || 'No color', style: c ? `background:${c}` : '', onclick: () => { this._closeMenu(); m.pick(c); } })))
         : m.sep ? el('hr')
+        : m.heading ? el('div', { class: 'yb-mh' }, m.heading)
           : el('button', { class: 'yb-mi' + (m.danger ? ' yb-danger' : ''), role: 'menuitem', onclick: () => { this._closeMenu(); m.run(); } }, m.icon ? icon(m.icon, 16) : el('span', { class: 'yb-ic' }), m.label)));
       this.menu.hidden = false;
       const rr = this.root.getBoundingClientRect();
