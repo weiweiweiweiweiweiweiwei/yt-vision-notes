@@ -174,17 +174,34 @@
       };
       let toolbar;
       if (this.mode === 'panel') {
-        const main = ['shot', 'summary', 'ai', 'board'].filter((k) => MAIN.includes(k));
-        const rest = [...MAIN, ...MORE, ...LOWER].filter((k) => !main.includes(k));
-        toolbar = el('div', { class: 'yb-bar' }, main.map(btn),
-          el('button', { class: 'yb-tool', title: 'More', onclick: (e) => this._menuAt(e.currentTarget, [
-            ...rest.map((k) => ({ label: T[k][1], icon: T[k][0], run: () => this.tool(k) })),
-            { sep: true },
-            { label: 'Undo (Ctrl+Z)', icon: 'undo', run: () => this.undo() },
-            { label: 'Redo (Ctrl+Y)', icon: 'redo', run: () => this.redo() },
-            { label: 'Trash', icon: 'trash', run: () => this.openTrash() },
-          ], true) }, icon('more', 20), el('span', {}, 'More')));
-        r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, this.vp), toolbar);
+        // YouTube panel: a floating side bar that slides in when the pointer reaches the left edge.
+        // Fixed size (not scaled with the canvas): Line / Board, the round Capture button, Column / Comment / More.
+        const SIDE = new Set(['line', 'board', 'column', 'comment', 'shot']);
+        const rest = ['summary', 'ai', ...MAIN, ...MORE, ...LOWER].filter((k, i, a) => T[k] && !SIDE.has(k) && a.indexOf(k) === i && (k !== 'summary' || this.o.capture) && (k !== 'ai' || this.o.aiGenerate));
+        const more = el('button', { class: 'yb-tool', title: 'More tools', 'aria-label': 'More tools', onclick: (e) => this._menuAt(e.currentTarget, [
+          ...rest.map((k) => ({ label: T[k][1], icon: T[k][0], run: () => this.tool(k) })),
+          { sep: true },
+          { label: 'Undo (Ctrl+Z)', icon: 'undo', run: () => this.undo() },
+          { label: 'Redo (Ctrl+Y)', icon: 'redo', run: () => this.redo() },
+          { label: 'Trash', icon: 'trash', run: () => this.openTrash() },
+        ], false, true) }, icon('more', 20), el('span', {}, 'More'));
+        const grab = this.o.capture && el('button', { class: 'yb-grab', title: T.shot[2], 'aria-label': 'Capture the current frame', onclick: () => this.tool('shot') }, icon('plus', 28));
+        this.side = el('div', { class: 'yb-side' },
+          el('div', { class: 'yb-sgroup' }, btn('line'), btn('board')),
+          grab,
+          el('div', { class: 'yb-sgroup' }, btn('column'), btn('comment'), more));
+        const hot = el('div', { class: 'yb-sidehot', 'aria-hidden': 'true' });
+        let hideT;
+        const show = () => { clearTimeout(hideT); this.side.classList.add('yb-open'); };
+        const hide = () => { clearTimeout(hideT); hideT = setTimeout(() => { if (this.menu.hidden && !this.side.matches(':hover')) this.side.classList.remove('yb-open'); }, 350); };
+        hot.addEventListener('pointerenter', show);
+        this.side.addEventListener('pointerenter', show);
+        this.side.addEventListener('pointerleave', hide);
+        this.side.addEventListener('focusin', show);
+        this.side.addEventListener('focusout', hide);
+        this._hideSide = hide;
+        toolbar = this.side;
+        r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, this.vp, hot, this.side));
       } else {
         this.flyout = el('div', { class: 'yb-flyout', hidden: true },
           ...MORE.map((k) => { const b = el('button', { class: 'yb-tool', title: T[k][2], onclick: () => { if (this._toolDragged) { this._toolDragged = false; return; } this.flyout.hidden = true; this.tool(k); } }, icon(T[k][0], 24), el('span', {}, T[k][1])); this._dragTool(b, k); return b; }));
@@ -1099,7 +1116,7 @@
     }
 
     // ---------- menus ----------
-    _menuAt(anchor, entries, above) {
+    _menuAt(anchor, entries, above, right) {
       this.menu.replaceChildren(...entries.filter(Boolean).map((m) => m.colors
         ? el('div', { class: 'yb-colors' }, ...m.colors.map((c) => el('button', { class: 'yb-swbtn' + (c ? '' : ' yb-nocolor'), title: c || 'No color', 'aria-label': c || 'No color', style: c ? `background:${c}` : '', onclick: () => { this._closeMenu(); m.pick(c); } })))
         : m.sep ? el('hr')
@@ -1108,11 +1125,11 @@
       const rr = this.root.getBoundingClientRect();
       const a = anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : { left: anchor.x, right: anchor.x, top: anchor.y, bottom: anchor.y };
       const mw = this.menu.offsetWidth, mh = this.menu.offsetHeight;
-      let x = a.left - rr.left, y = above ? a.top - rr.top - mh - 6 : a.bottom - rr.top + 4;
+      let x = right ? a.right - rr.left + 8 : a.left - rr.left, y = right ? a.top - rr.top : above ? a.top - rr.top - mh - 6 : a.bottom - rr.top + 4;
       x = clamp(x, 6, rr.width - mw - 6); y = clamp(y, 6, rr.height - mh - 6);
       this.menu.style.left = x + 'px'; this.menu.style.top = y + 'px';
     }
-    _closeMenu() { this.menu.hidden = true; }
+    _closeMenu() { this.menu.hidden = true; if (this._hideSide) this._hideSide(); }
 
     _itemMenu(id, anchor) {
       const it = this.board.items.find((i) => i.id === id);

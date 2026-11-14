@@ -420,3 +420,17 @@ button.yb-playbadge:hover { background: #e5484d; transform: translate(-50%, -50%
 .yb-spin { width: 16px; height: 16px; flex: none; border: 2px solid var(--yb-line); border-top-color: var(--yb-accent); border-radius: 50%; animation: yb-spin .8s linear infinite; }
 @keyframes yb-spin { to { transform: rotate(360deg); } }
 .yb-tool[data-tool="ai"] .yb-ic { color: #b085f5; }
+
+/* ---------- YouTube panel: auto-hiding side bar ---------- */
+.yb-panel .yb-body { overflow: hidden; }
+.yb-sidehot { position: absolute; left: 0; top: 0; bottom: 0; width: 18px; z-index: 19; }
+.yb-side { position: absolute; z-index: 20; left: 10px; top: 50%; display: flex; flex-direction: column; align-items: center; gap: 18px; transform: translate(calc(-100% - 16px), -50%); transition: transform .2s ease, opacity .2s ease; opacity: 0; pointer-events: none; }
+.yb-side.yb-open { transform: translate(0, -50%); opacity: 1; pointer-events: auto; }
+.yb-sgroup { display: flex; flex-direction: column; gap: 2px; padding: 6px 4px; border: 1px solid var(--yb-line); border-radius: 14px; background: var(--yb-head); box-shadow: 0 8px 24px rgba(0, 0, 0, .28); }
+.yb-sgroup .yb-tool { min-width: 58px; font-size: 11px !important; padding: 5px 2px 6px; }
+.yb-sgroup .yb-tool .yb-ic { width: 40px; height: 30px; display: grid; place-items: center; border-radius: 7px; background: var(--yb-raised); }
+.yb-grab { width: 58px; height: 58px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: linear-gradient(145deg, #63a4ff 0%, #2f6bff 55%, #1d4fd8 100%); color: #fff !important; cursor: pointer; box-shadow: 0 8px 22px rgba(47, 107, 255, .45), inset 0 1px 0 rgba(255, 255, 255, .35); transition: transform .12s ease, box-shadow .12s ease; }
+.yb-grab:hover { transform: scale(1.06); box-shadow: 0 10px 26px rgba(47, 107, 255, .55), inset 0 1px 0 rgba(255, 255, 255, .35); }
+.yb-grab:active { transform: scale(.96); }
+.yb-grab .yb-ic svg { stroke-width: 2.4; }
+@media (prefers-reduced-motion: reduce) { .yb-side { transition: none; } }
