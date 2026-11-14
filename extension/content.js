@@ -224,11 +224,15 @@
     if (!bar || bar.querySelector('.yvn-toggle')) return;
     const svgNS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(svgNS, 'svg');
-    svg.setAttribute('viewBox', '0 0 36 36'); svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%');
-    const path = document.createElementNS(svgNS, 'path');
-    path.setAttribute('fill', 'currentColor');
-    path.setAttribute('d', 'M11 9h10l5 5v13a1 1 0 0 1-1 1H11a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1zm1 2v15h12V15h-4v-4h-8zm2 7h3v-3h2v3h3v2h-3v3h-2v-3h-3v-2z');
-    svg.appendChild(path);
+    // a brain, drawn as a 24px line icon and centred by CSS (see .yvn-toggle in content.css)
+    svg.setAttribute('viewBox', '0 0 24 24');
+    for (const [k, v] of Object.entries({ fill: 'none', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })) svg.setAttribute(k, v);
+    const BRAIN = [
+      'M9.4 4.6C7.6 4.1 5.8 5.2 5.4 7C3.8 7.5 2.9 9.1 3.3 10.7C2.5 12.2 3.1 14 4.7 14.8C5.4 16.1 6.9 16.7 8.4 16.3C9.9 17.6 12.3 17.8 14 16.9L14.5 19.4C14.7 20.6 16.3 20.6 16.5 19.4L16.7 17.1C18.9 16.9 20.6 15.3 20.8 13.1C21.4 11.2 20.7 9.2 19.1 8.2C18.7 6.2 16.9 4.8 14.9 5C13.4 3.7 11 3.6 9.4 4.6Z',
+      'M9.4 4.6C10 5.6 9.8 6.7 9 7.4', 'M5.4 7C6.6 6.9 7.6 7.5 8.1 8.5', 'M12.2 6.3C12 7.8 13 9 14.4 9.2', 'M19.1 8.2C17.9 8.3 17 9 16.6 10',
+      'M6.6 13.2C8.2 11.7 10.8 11.5 12.8 12.4C14.4 13.1 16.2 12.8 17.3 11.7', 'M4.7 14.8C5 13.9 5.7 13.4 6.6 13.2', 'M10.3 9.6C11.2 10.4 12.4 10.5 13.3 10', 'M14 16.9C14.9 16.4 15.9 16.6 16.7 17.1',
+    ];
+    for (const d of BRAIN) { const p = document.createElementNS(svgNS, 'path'); p.setAttribute('d', d); svg.appendChild(p); }
     const btn = el('button', { class: 'ytp-button yvn-toggle', title: 'Vision Notes', 'aria-label': 'Vision Notes', 'aria-pressed': String(S.on), onclick: () => setOn(!(S.on && !S.popped)) });
     btn.appendChild(svg);
     bar.prepend(btn);

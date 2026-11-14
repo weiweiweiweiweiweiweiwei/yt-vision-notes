@@ -1,15 +1,33 @@
 /* YT-Vision-Notes — YouTube page integration. Px only (YouTube sets html{font-size:10px}). */
 
 /* player toggle */
-.ytp-button.yvn-toggle { opacity: .9; vertical-align: top; }
+/* sized and centred by us (not by YouTube's own button rules, which differ between player versions) */
+.ytp-button.yvn-toggle {
+  display: inline-flex !important; align-items: center; justify-content: center; flex: none; align-self: center;
+  width: 48px !important; height: 100% !important; min-height: 36px; padding: 0 !important; margin: 0 !important;
+  opacity: .9; vertical-align: top;
+}
+.ytp-button.yvn-toggle svg { width: 24px !important; height: 24px !important; flex: none; display: block; padding: 0 !important; margin: 0 !important; }
 .ytp-button.yvn-toggle.on { color: #ffd60a; opacity: 1; }
 .ytp-button.yvn-toggle.popped { color: #7b9bff; opacity: 1; }
 
 /* replace the recommendation column with the note board */
 html.yvn-on ytd-watch-flexy #secondary-inner,
 html.yvn-on ytd-watch-flexy #secondary #related { display: none !important; }
-html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) { --ytd-watch-flexy-min-player-width: 320px; }
-html.yvn-on ytd-watch-flexy #primary { min-width: 0 !important; }
+/* Other extensions (e.g. FlowStudy's "hide recommended videos" / immersion mode) hide the whole #secondary column.
+   The note panel lives in it, so keep the column itself visible; the recommendations inside stay hidden (rule above).
+   The doubled class and id are only there to outrank those rules. */
+html.yvn-on.yvn-on ytd-watch-flexy #secondary#secondary { display: block !important; }
+/* The player must be allowed to get as narrow as the divider makes it. YouTube keeps it at least
+   240px (480px on large windows) tall, i.e. 427px / 853px wide; below that it would stick out of its column and be cut off. */
+html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) { --ytd-watch-flexy-min-player-height: 0px; }
+html.yvn-on ytd-watch-flexy #primary,
+html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) #player-container-outer { min-width: 0 !important; }
+/* ...and the picture always fits inside the player box, whatever size YouTube last calculated for it */
+html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) #movie_player .html5-video-container { width: 100% !important; height: 100% !important; }
+html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) #movie_player video.html5-main-video {
+  width: 100% !important; height: 100% !important; left: 0 !important; top: 0 !important; object-fit: contain !important;
+}
 html:not(.yvn-on) #yvn-panel, html:not(.yvn-on) #yvn-split { display: none !important; }
 
 /* divider (sits in YouTube's flex row between #primary and #secondary) */
