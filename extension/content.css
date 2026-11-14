@@ -20,11 +20,13 @@ html.yvn-on ytd-watch-flexy #secondary #related { display: none !important; }
 html.yvn-on.yvn-on ytd-watch-flexy #secondary#secondary { display: block !important; }
 /* The player must be allowed to get as narrow as the divider makes it. YouTube keeps it at least
    240px (480px on large windows) tall, i.e. 427px / 853px wide; below that it would stick out of its column and be cut off. */
-html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) { --ytd-watch-flexy-min-player-height: 0px; }
+html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) { --ytd-watch-flexy-min-player-width: 0px; --ytd-watch-flexy-min-player-height: 0px; }
 html.yvn-on ytd-watch-flexy #primary,
 html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) #player-container-outer { min-width: 0 !important; }
 /* ...and the picture always fits inside the player box, whatever size YouTube last calculated for it */
 html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) #movie_player .html5-video-container { width: 100% !important; height: 100% !important; }
+/* the control bar's width is set in px by the player; keep it inside the player box even if that number is stale */
+html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) #movie_player .ytp-chrome-bottom { left: 12px !important; width: calc(100% - 24px) !important; }
 html.yvn-on ytd-watch-flexy:not([theater]):not([fullscreen]) #movie_player video.html5-main-video {
   width: 100% !important; height: 100% !important; left: 0 !important; top: 0 !important; object-fit: contain !important;
 }
