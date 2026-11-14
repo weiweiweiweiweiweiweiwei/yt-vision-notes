@@ -17,7 +17,7 @@
   const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
   const done = (tx) => new Promise((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error('tx aborted')); });
   const strip = (v) => { const o = {}; for (const k in v) if (k[0] !== '_') o[k] = v[k]; return o; };
-  const ITEM_KEYS = ['x', 'y', 'w', 'color', 'text', 'title', 'url', 'ts', 'video', 'image', 'boardId', 'comments', 'col', 'ord', 'from', 'to', 'arrow', 'label', 'hex', 'name', 'rows', 'strokes', 'sh', 'pts', 'size', 'query', 'file', 'collapsed', 'locked', 'h'];
+  const ITEM_KEYS = ['x', 'y', 'w', 'color', 'text', 'title', 'url', 'ts', 'video', 'image', 'boardId', 'comments', 'col', 'ord', 'from', 'to', 'arrow', 'label', 'hex', 'name', 'rows', 'strokes', 'sh', 'pts', 'size', 'query', 'file', 'collapsed', 'locked', 'h', 'bend'];
   const TRASH_MS = 30 * 24 * 3600 * 1000; // deleted cards keep their images this long (restorable from the trash)
 
   class Store {

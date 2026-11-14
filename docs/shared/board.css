@@ -377,3 +377,7 @@ button.yb-playbadge:hover { background: #e5484d; transform: translate(-50%, -50%
 .yb-column { display: flex; flex-direction: column; }
 .yb-column > .yb-colbody { flex: 1; }
 .yb-colcollapsed { min-height: 0 !important; }
+
+/* curved lines: middle handle bends the line */
+.yb-lines .yb-hmid { fill: var(--yb-accent); stroke: var(--yb-card); stroke-width: 2; cursor: grab; }
+.yb-lines .yb-ldot { pointer-events: none; }

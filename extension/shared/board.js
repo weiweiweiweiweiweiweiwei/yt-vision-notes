@@ -828,6 +828,11 @@
       if (gst.kind === 'line-end') {
         const ln = this.board.items.find((i) => i.id === gst.id);
         if (!gst.moved || !ln) { this._renderLines(); return; }
+        if (gst.end === 'mid') {
+          const bend = this._bendFrom(this._endBox(ln.from), this._endBox(ln.to), this._toBoard(e.clientX, e.clientY));
+          await this.m.patchItems(this.boardId, [{ id: gst.id, bend }]);
+          return this.reload();
+        }
         const other = gst.end === 'from' ? ln.to : ln.from;
         const pt = this._endAt(e, other && other.id);
         await this.m.patchItems(this.boardId, [{ id: gst.id, [gst.end]: pt }]);
@@ -987,6 +992,8 @@
       const t = e.target;
       if (t.closest('textarea, input, [data-act], .yb-rt')) return;
       if (t.closest('.yb-shield')) { t.closest('.yb-shield').remove(); return; }
+      const hmid = t.closest('.yb-hmid');
+      if (hmid) { this.m.patchItems(this.boardId, [{ id: hmid.dataset.line, bend: null }]).then(() => this.reload()); return; }
       const lineEl = t.closest('.yb-line, .yb-llabel');
       if (lineEl) return this._editLineLabel(lineEl.dataset.id);
       if (t.closest('.yb-colhead')) return this._renameColumn(t.closest('.yb-item')._item);
@@ -1045,7 +1052,7 @@
 
     // ---------- menus ----------
     _menuAt(anchor, entries, above) {
-      this.menu.replaceChildren(...entries.map((m) => m.colors
+      this.menu.replaceChildren(...entries.filter(Boolean).map((m) => m.colors
         ? el('div', { class: 'yb-colors' }, ...m.colors.map((c) => el('button', { class: 'yb-swbtn' + (c ? '' : ' yb-nocolor'), title: c || 'No color', 'aria-label': c || 'No color', style: c ? `background:${c}` : '', onclick: () => { this._closeMenu(); m.pick(c); } })))
         : m.sep ? el('hr')
           : el('button', { class: 'yb-mi' + (m.danger ? ' yb-danger' : ''), role: 'menuitem', onclick: () => { this._closeMenu(); m.run(); } }, m.icon ? icon(m.icon, 16) : el('span', { class: 'yb-ic' }), m.label)));
@@ -2005,6 +2012,37 @@
       const t = Math.min(dx ? (r.w / 2 + pad) / Math.abs(dx) : Infinity, dy ? (r.h / 2 + pad) / Math.abs(dy) : Infinity);
       return { x: cx + dx * Math.min(t, 1), y: cy + dy * Math.min(t, 1) };
     }
+    /**
+     * Geometry of a line between two ends (points or card boxes).
+     * bend = {a, p}: the curve's middle point, as fractions of the line length along / across the line,
+     * so a bent line keeps its shape when the connected cards move. midPt overrides it while dragging.
+     */
+    _lineGeom(A, B, bend, midPt) {
+      const ca = this._center(A), cb = this._center(B);
+      const dx = cb.x - ca.x, dy = cb.y - ca.y, L = Math.hypot(dx, dy) || 1;
+      const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+      const mid = { x: (ca.x + cb.x) / 2, y: (ca.y + cb.y) / 2 };
+      let P = midPt || null;
+      if (!P && bend && (bend.a || bend.p)) P = { x: mid.x + (bend.a * ux + bend.p * nx) * L, y: mid.y + (bend.a * uy + bend.p * ny) * L };
+      if (!P) {
+        const pa = this._clip(A, cb), pb = this._clip(B, ca);
+        return { pa, pb, d: `M${pa.x},${pa.y} L${pb.x},${pb.y}`, ta: pb, tb: pa, mid: { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 } };
+      }
+      const C = { x: 2 * P.x - mid.x, y: 2 * P.y - mid.y }; // control point so the curve passes through P
+      const pa = this._clip(A, C), pb = this._clip(B, C);
+      const m = { x: 0.25 * pa.x + 0.5 * C.x + 0.25 * pb.x, y: 0.25 * pa.y + 0.5 * C.y + 0.25 * pb.y };
+      return { pa, pb, d: `M${pa.x},${pa.y} Q${C.x},${C.y} ${pb.x},${pb.y}`, ta: C, tb: C, mid: m };
+    }
+    /** Store a dragged middle point as a bend relative to the line (null = straight). */
+    _bendFrom(A, B, P) {
+      const ca = this._center(A), cb = this._center(B);
+      const dx = cb.x - ca.x, dy = cb.y - ca.y, L = Math.hypot(dx, dy) || 1;
+      const ux = dx / L, uy = dy / L;
+      const ox = P.x - (ca.x + cb.x) / 2, oy = P.y - (ca.y + cb.y) / 2;
+      const a = (ox * ux + oy * uy) / L, q = (ox * -uy + oy * ux) / L;
+      if (Math.hypot(ox, oy) < 6) return null;
+      return { a: Math.round(a * 1000) / 1000, p: Math.round(q * 1000) / 1000 };
+    }
     _center(box) { return box.rect ? { x: box.rect.x + box.rect.w / 2, y: box.rect.y + box.rect.h / 2 } : { x: box.x, y: box.y }; }
     _renderLines() {
       if (!this.svg || !this.board) return;
@@ -2019,29 +2057,35 @@
         const px = -Math.sin(ang) * W, py = Math.cos(ang) * W;
         g.append(mk('path', { d: `M${tip.x},${tip.y} L${bx + px},${by + py} L${bx - px},${by - py} Z`, class: 'yb-arrow', style: `fill:${color}` }));
       };
-      const draw = (ln, A, B, selected, preview) => {
-        const pa = this._clip(A, this._center(B)), pb = this._clip(B, this._center(A));
+      const draw = (ln, A, B, selected, preview, midPt) => {
+        const G = this._lineGeom(A, B, ln.bend, midPt);
+        const { pa, pb, d } = G;
         const color = ln.color || 'var(--yb-linec)';
         const g = mk('g', { class: 'yb-line' + (selected ? ' yb-lsel' : '') + (preview ? ' yb-lprev' : ''), 'data-id': ln.id || '' });
-        const d = `M${pa.x},${pa.y} L${pb.x},${pb.y}`;
         if (!preview) g.append(mk('path', { d, class: 'yb-hit' }));
         g.append(mk('path', { d, class: 'yb-vis', style: `stroke:${color}` }));
-        if (ln.arrow === 'end' || ln.arrow === 'both') arrow(g, pb, pa, color);
-        if (ln.arrow === 'both') arrow(g, pa, pb, color);
+        if (ln.arrow === 'end' || ln.arrow === 'both') arrow(g, pb, G.ta, color);
+        if (ln.arrow === 'both') arrow(g, pa, G.tb, color);
+        else if (ln.arrow === 'end') g.append(mk('circle', { cx: pa.x, cy: pa.y, r: 3.2, class: 'yb-ldot', style: `fill:${color}` }));
         if (selected && !preview) {
           g.append(mk('circle', { cx: pa.x, cy: pa.y, r: 6, class: 'yb-hnd', 'data-line': ln.id, 'data-end': 'from' }));
           g.append(mk('circle', { cx: pb.x, cy: pb.y, r: 6, class: 'yb-hnd', 'data-line': ln.id, 'data-end': 'to' }));
+          // middle handle: drag to bend the line into a curve, double-click to straighten
+          g.append(mk('circle', { cx: G.mid.x, cy: G.mid.y, r: 5.5, class: 'yb-hnd yb-hmid', 'data-line': ln.id, 'data-end': 'mid' }));
         }
         this.svg.append(g);
         if (ln.label && !preview) {
-          this.lbls.append(el('div', { class: 'yb-llabel' + (selected ? ' yb-lsel' : ''), dataset: { id: ln.id }, style: `left:${(pa.x + pb.x) / 2}px;top:${(pa.y + pb.y) / 2}px` }, ln.label));
+          this.lbls.append(el('div', { class: 'yb-llabel' + (selected ? ' yb-lsel' : ''), dataset: { id: ln.id }, style: `left:${G.mid.x}px;top:${G.mid.y}px` }, ln.label));
         }
       };
       for (const ln of YVN.liveItems(this.board)) {
         if (ln.type !== 'line') continue;
-        let A = this._endBox(ln.from), B = this._endBox(ln.to);
-        if (gst && gst.kind === 'line-end' && gst.id === ln.id && gst.pt) { if (gst.end === 'from') A = gst.pt; else B = gst.pt; }
-        draw(ln, A, B, this.sel.has(ln.id));
+        let A = this._endBox(ln.from), B = this._endBox(ln.to), midPt = null;
+        if (gst && gst.kind === 'line-end' && gst.id === ln.id && gst.pt) {
+          if (gst.end === 'mid') midPt = gst.pt;
+          else if (gst.end === 'from') A = gst.pt; else B = gst.pt;
+        }
+        draw(ln, A, B, this.sel.has(ln.id), false, midPt);
       }
       const inkPath = (pts) => pts.map((q, i) => (i ? 'L' : 'M') + q[0] + ',' + q[1]).join(' ');
       for (const ink of YVN.liveItems(this.board)) {
@@ -2067,16 +2111,16 @@
         { label: 'Arrow →', icon: 'line', run: () => set({ arrow: 'end' }) },
         { label: 'Two-way arrow ↔', icon: 'line', run: () => set({ arrow: 'both' }) },
         { label: 'No arrow —', icon: 'line', run: () => set({ arrow: 'none' }) },
-        { label: 'Reverse direction', icon: 'redo', run: () => set({ from: ln.to, to: ln.from }) },
+        { label: 'Reverse direction', icon: 'redo', run: () => set({ from: ln.to, to: ln.from, bend: ln.bend ? { a: -ln.bend.a, p: -ln.bend.p } : null }) },
+        ln.bend && { label: 'Straighten', icon: 'line', run: () => set({ bend: null }) },
         { colors: [null, ...YVN.BOARD_COLORS], pick: (c) => set({ color: c }) },
       ]);
     }
     _editLineLabel(id) {
       const ln = this.board.items.find((i) => i.id === id);
       if (!ln) return;
-      const A = this._endBox(ln.from), B = this._endBox(ln.to);
-      const pa = this._clip(A, this._center(B)), pb = this._clip(B, this._center(A));
-      const inp = el('input', { class: 'yb-input yb-lblinput', value: ln.label || '', placeholder: 'Line label', style: `left:${(pa.x + pb.x) / 2}px;top:${(pa.y + pb.y) / 2}px` });
+      const G = this._lineGeom(this._endBox(ln.from), this._endBox(ln.to), ln.bend);
+      const inp = el('input', { class: 'yb-input yb-lblinput', value: ln.label || '', placeholder: 'Line label', style: `left:${G.mid.x}px;top:${G.mid.y}px` });
       this.layer.append(inp);
       inp.focus(); inp.select();
       let done = false;
