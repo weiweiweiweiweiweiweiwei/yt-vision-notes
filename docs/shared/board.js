@@ -57,6 +57,16 @@
     dock: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M14 5v14"/>',
     comment: '<path d="M4 5h16v11H10l-4 4v-4H4z"/>',
     column: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h8"/>',
+    table: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M3 15h18M9 5v14M15 5v14"/>',
+    sketch: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15c2-4 3 1 5-2s3-3 5 0"/>',
+    heading: '<path d="M6 5h12M12 5v14M9 19h6"/>',
+    video: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/>',
+    map: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
+    audio: '<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/>',
+    doc: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
+    upload: '<path d="M6 3h8l5 5v13H6z"/><path d="M13 3v6h6"/>',
+    draw: '<path d="m4 20 4-1 11-11-3-3L5 16z"/><path d="m14 6 3 3"/>',
+    file: '<path d="M6 3h8l5 5v13H6z"/><path d="M13 3v6h6"/>',
     line: '<path d="M5 19 19 5"/><path d="M12 5h7v7"/>',
     swatch: '<rect x="4" y="4" width="12" height="16" rx="2"/><path d="M4 14h12"/><path d="m16 7 4 2-4 9"/>',
     undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
@@ -124,29 +134,41 @@
       this.menu = el('div', { class: 'yb-menu', hidden: true, role: 'menu' });
       this.searchBox = this._buildSearch();
       this.toastEl = el('div', { class: 'yb-toast', role: 'status', hidden: true });
-      this.fileInput = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: (e) => { this._addFiles([...e.target.files]); e.target.value = ''; } });
+      this.fileInput = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: (e) => { this._addFiles([...e.target.files], null, this._fileKind); e.target.value = ''; } });
 
-      const tools = [
-        this.o.capture && ['shot', 'camera', '截圖', '擷取目前影片畫面，直接放進這個 Board（Alt+S）'],
-        this.o.capture && ['summary', 'summary', '總結', '針對整部影片的總結筆記（不含截圖）'],
-        ['note', 'note', '筆記', '文字筆記（也可以雙擊空白處）'],
-        ['board', 'board', 'Board', '新增子 Board'],
-        ['todo', 'todo', '待辦', '待辦清單'],
-        ['link', 'link', '連結', '網址或 YouTube 影片'],
-        ['column', 'column', '欄', '欄：把卡片收成一直排，可整欄移動'],
-        ['line', 'line', '連線', '在卡片之間拉線或箭頭'],
-        ['color', 'swatch', '色票', '顏色色票卡（點色碼即可複製）'],
-        ['comment', 'comment', '留言', '留言串：可回覆、可放進欄裡'],
-        ['upload', 'image', '圖片', '上傳圖片（也可以貼上或拖曳）'],
-      ].filter(Boolean);
-      const btn = ([act, ic, label, title]) => el('button', { class: 'yb-tool' + (act === 'shot' ? ' yb-primary' : ''), title, dataset: { tool: act }, onclick: () => this.tool(act) }, icon(ic, 20), el('span', {}, label));
+      const T = {
+        shot: ['camera', '截圖', '擷取目前影片畫面，直接放進這個 Board（Alt+S）'],
+        summary: ['summary', '總結', '針對整部影片的總結筆記（不含截圖）'],
+        note: ['note', '筆記', '文字筆記（也可以雙擊空白處）'],
+        link: ['link', '連結', '網址或 YouTube 影片'],
+        todo: ['todo', '待辦', '待辦清單'],
+        line: ['line', '連線', '在卡片之間拉線或箭頭'],
+        board: ['board', 'Board', '新增子 Board'],
+        column: ['column', '欄', '欄：把卡片收成一直排，可整欄移動'],
+        comment: ['comment', '留言', '留言串：可回覆、可放進欄裡'],
+        table: ['table', '表格', '表格'],
+        sketch: ['sketch', '草圖', '在卡片裡手繪草圖'],
+        color: ['swatch', '色票', '顏色色票卡（點色碼即可複製）'],
+        heading: ['heading', '標題', '大標題文字（沒有卡片背景）'],
+        video: ['video', '影片', '嵌入 YouTube / Vimeo 影片，或上傳影片檔'],
+        map: ['map', '地圖', '嵌入地點地圖'],
+        audio: ['audio', '音訊', '上傳音訊檔，在卡片裡播放'],
+        doc: ['doc', '文件', '長篇文件：卡片顯示摘要，打開是全螢幕編輯'],
+        upload_image: ['image', '圖片', '上傳圖片（也可以貼上或拖曳）'],
+        upload: ['upload', '上傳', '上傳任何檔案（PDF、音訊、影片…）'],
+        draw: ['draw', '繪圖', '直接在白板上手繪'],
+      };
+      const MAIN = [this.o.capture && 'shot', this.o.capture && 'summary', 'note', 'link', 'todo', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'color'].filter(Boolean);
+      const MORE = ['heading', 'video', 'map', 'audio', 'doc'];
+      const LOWER = ['upload_image', 'upload', 'draw'];
+      const btn = (act) => el('button', { class: 'yb-tool' + (act === 'shot' ? ' yb-primary' : ''), title: T[act][2], dataset: { tool: act }, onclick: () => this.tool(act) }, icon(T[act][0], 20), el('span', {}, T[act][1]));
       let toolbar;
       if (this.mode === 'panel') {
-        const main = tools.filter((t) => ['shot', 'summary', 'board'].includes(t[0]));
-        const rest = tools.filter((t) => !['shot', 'summary', 'board'].includes(t[0]));
+        const main = ['shot', 'summary', 'board'].filter((k) => MAIN.includes(k));
+        const rest = [...MAIN, ...MORE, ...LOWER].filter((k) => !main.includes(k));
         toolbar = el('div', { class: 'yb-bar' }, main.map(btn),
           el('button', { class: 'yb-tool', title: '更多', onclick: (e) => this._menuAt(e.currentTarget, [
-            ...rest.map(([act, ic, label]) => ({ label, icon: ic, run: () => this.tool(act) })),
+            ...rest.map((k) => ({ label: T[k][1], icon: T[k][0], run: () => this.tool(k) })),
             { sep: true },
             { label: '復原 (Ctrl+Z)', icon: 'undo', run: () => this.undo() },
             { label: '重做 (Ctrl+Y)', icon: 'redo', run: () => this.redo() },
@@ -154,10 +176,20 @@
           ], true) }, icon('more', 20), el('span', {}, '更多')));
         r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, this.vp), toolbar);
       } else {
-        toolbar = el('div', { class: 'yb-tools' }, tools.map(btn),
+        this.flyout = el('div', { class: 'yb-flyout', hidden: true },
+          ...MORE.map((k) => el('button', { class: 'yb-tool', title: T[k][2], onclick: () => { this.flyout.hidden = true; this.tool(k); } }, icon(T[k][0], 24), el('span', {}, T[k][1]))));
+        const moreBtn = el('button', { class: 'yb-tool yb-moretool', title: '更多工具', 'aria-label': '更多工具', onclick: (e) => {
+          const fr = e.currentTarget.getBoundingClientRect(), rr = r.getBoundingClientRect();
+          this.flyout.hidden = !this.flyout.hidden;
+          this.flyout.style.left = fr.right - rr.left + 8 + 'px';
+          this.flyout.style.top = Math.max(8, Math.min(fr.top - rr.top - 60, rr.height - 260)) + 'px';
+        } }, el('span', { class: 'yb-dots' }, icon('more', 20)));
+        toolbar = el('div', { class: 'yb-tools' }, MAIN.map(btn), moreBtn, el('hr', { class: 'yb-tsep' }), LOWER.map(btn),
           el('button', { class: 'yb-tool yb-trashbtn', title: '垃圾桶：刪除的卡片保留 30 天，可還原', onclick: () => this.openTrash() }, icon('trash', 20), el('span', {}, '垃圾桶')));
-        r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, toolbar, this.vp));
+        r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, toolbar, this.vp), this.flyout);
       }
+      this.drawBar = this._buildDrawBar();
+      r.append(this.drawBar);
       this.cpop = el('div', { class: 'yb-cpop', hidden: true, role: 'dialog' });
       this.trashBox = el('div', { class: 'yb-search yb-trashbox', hidden: true });
       r.append(this.menu, this.searchBox, this.trashBox, this.cpop, this.toastEl, this.fileInput);
@@ -302,7 +334,7 @@
       this._applyView(); this._saveView();
     }
     _rectOf(it) {
-      if (it.type === 'line') return { x: 0, y: 0, w: 0, h: 0 };
+      if (it.type === 'line' || it.type === 'ink') return { x: 0, y: 0, w: 0, h: 0 };
       const e = this.els.get(it.id);
       if (e && e.isConnected && this._inCol(it)) return this._layerRect(e);
       if (e && e.offsetWidth) return { x: it.x, y: it.y, w: e.offsetWidth, h: e.offsetHeight };
@@ -315,7 +347,7 @@
     }
     _inCol(it) { return !!(it && it.col && this._colIds && this._colIds.has(it.col)); }
     /** Free-floating cards (not lines, not cards stacked inside a column). */
-    _cards() { return YVN.liveItems(this.board).filter((i) => i.type !== 'line' && !this._inCol(i)); }
+    _cards() { return YVN.liveItems(this.board).filter((i) => i.type !== 'line' && i.type !== 'ink' && !this._inCol(i)); }
     fit() {
       const items = this._cards();
       const r = this.vp.getBoundingClientRect();
@@ -363,7 +395,7 @@
       const keep = new Set();
       const kids = new Map();
       for (const it of live) {
-        if (it.type === 'line') { keep.add(it.id); continue; }
+        if (it.type === 'line' || it.type === 'ink') { keep.add(it.id); continue; }
         keep.add(it.id);
         let e = this.els.get(it.id);
         const s = it.type === 'board' ? this.sums[it.boardId] || {} : {};
@@ -447,6 +479,38 @@
           el('span', { class: 'yb-coltitle' + (it.title ? '' : ' yb-ph') }, it.title || '未命名欄'),
           el('small', { class: 'yb-colcount' }, '')),
         el('div', { class: 'yb-colbody' }));
+      } else if (it.type === 'heading') {
+        c.append(el('div', { class: 'yb-htext' + (it.text ? '' : ' yb-ph') }, it.text || '標題'));
+      } else if (it.type === 'table') {
+        c.append(this._tableEl(it.rows, false));
+      } else if (it.type === 'sketch') {
+        c.append(this._sketchSvg(it));
+        if (!(it.strokes || []).length) c.append(el('div', { class: 'yb-skph yb-ph' }, '雙擊開始畫'));
+      } else if (it.type === 'video') {
+        const vid = ytId(it.url), vimeo = /vimeo\.com\/(?:video\/)?(\d+)/.exec(it.url || '');
+        const wrap = el('div', { class: 'yb-imgwrap yb-vwrap', dataset: { act: 'play' } });
+        if (it.file) wrap.append(el('div', { class: 'yb-vfile' }, icon('video', 34), el('span', {}, it.file.name)));
+        else if (vid) wrap.append(el('img', { src: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`, alt: '', draggable: 'false' }));
+        else wrap.append(el('div', { class: 'yb-vfile' }, icon('video', 34), el('span', {}, vimeo ? 'Vimeo' : it.url ? host(it.url) : '雙擊貼上影片網址')));
+        if (it.url || it.file) wrap.append(el('span', { class: 'yb-playbadge' }, icon('play', 18)));
+        c.append(wrap, el('div', { class: 'yb-linkbody' }, el('div', { class: 'yb-linktxt' }, el('b', {}, it.title || (it.file ? it.file.name : it.url ? host(it.url) : '影片')), el('small', {}, it.file ? YVN.fmtSize(it.file.size) : host(it.url || '')))));
+      } else if (it.type === 'map') {
+        c.append(el('div', { class: 'yb-imgwrap yb-mapwrap', dataset: { act: 'play' } },
+          el('div', { class: 'yb-vfile' }, icon('map', 34), el('span', {}, it.query ? '點一下載入地圖' : '雙擊輸入地點'))),
+        el('div', { class: 'yb-linkbody' }, el('span', { class: 'yb-linkic' }, icon('map', 18)),
+          el('div', { class: 'yb-linktxt' }, el('b', {}, it.query || '未設定地點'), it.query && el('a', { href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.query)}`, target: '_blank', rel: 'noopener noreferrer', dataset: { act: 'open' } }, '在 Google 地圖開啟'))));
+      } else if (it.type === 'audio') {
+        const au = el('audio', { controls: true, preload: 'none' });
+        this._loadMedia(it, au);
+        c.append(el('div', { class: 'yb-audio' }, el('div', { class: 'yb-ahead' }, el('span', { class: 'yb-aic' }, icon('audio', 20)), el('div', { class: 'yb-linktxt' }, el('b', {}, it.file ? it.file.name : '音訊'), el('small', {}, it.file ? YVN.fmtSize(it.file.size) : ''))), au));
+      } else if (it.type === 'file') {
+        c.append(el('div', { class: 'yb-linkbody' }, el('span', { class: 'yb-linkic yb-fileic' }, icon('file', 20)),
+          el('div', { class: 'yb-linktxt' }, el('b', {}, it.file ? it.file.name : '檔案'), el('small', {}, it.file ? `${YVN.fmtSize(it.file.size)} · 雙擊開啟` : ''))));
+      } else if (it.type === 'doc') {
+        const plain = YVN.plainText(it.text || '').replace(/\s+/g, ' ').trim();
+        c.append(el('div', { class: 'yb-docic' }, icon('doc', 26)),
+          el('div', { class: 'yb-doctitle' + (it.title ? '' : ' yb-ph') }, it.title || '未命名文件'),
+          el('div', { class: 'yb-docprev' }, plain ? plain.slice(0, 120) + (plain.length > 120 ? '…' : '') : '雙擊開啟文件'));
       } else if (it.type === 'comment') {
         const thread = el('div', { class: 'yb-thread' });
         for (const cm of it.comments || []) thread.append(this._commentLine(cm));
@@ -492,6 +556,14 @@
       vp.addEventListener('input', () => this._renderLines());
       vp.addEventListener('click', (e) => this._click(e));
       vp.addEventListener('contextmenu', (e) => {
+        const ink = e.target.closest('.yb-inkg');
+        if (ink) {
+          e.preventDefault(); this.sel = new Set([ink.dataset.id]); this._paintSel();
+          const id = ink.dataset.id;
+          return this._menuAt({ x: e.clientX, y: e.clientY }, [
+            { colors: ['#f1f1f3', '#1d1d1f', ...YVN.BOARD_COLORS], pick: async (c) => { await this.m.patchItems(this.boardId, [{ id, color: c || '#8b8d98' }]); this.reload(); } },
+            { sep: true }, { label: '刪除筆跡', danger: true, run: async () => { await this.m.deleteItems(this.boardId, [id]); this.reload(); } }]);
+        }
         const ln = e.target.closest('.yb-line, .yb-llabel');
         if (ln) { e.preventDefault(); this.sel = new Set([ln.dataset.id]); this._paintSel(); return this._lineMenu(ln.dataset.id, { x: e.clientX, y: e.clientY }); }
         const c = e.target.closest('.yb-item');
@@ -514,10 +586,10 @@
       }, { passive: false });
       vp.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
       vp.addEventListener('drop', (e) => {
-        const files = [...(e.dataTransfer.files || [])].filter((f) => /^image\//.test(f.type));
+        const files = [...(e.dataTransfer.files || [])];
         if (!files.length) return;
         e.preventDefault();
-        this._addFiles(files, this._toBoard(e.clientX, e.clientY));
+        this._addFiles(files, this._toBoard(e.clientX, e.clientY), 'auto');
       });
       this.root.addEventListener('paste', (e) => {
         if (this.editing || e.target.closest('input,textarea')) return;
@@ -544,6 +616,7 @@
       }
       document.addEventListener('pointerdown', (e) => {
         if (!this.menu.hidden && !this.menu.contains(e.target)) this._closeMenu();
+        if (this.flyout && !this.flyout.hidden && !this.flyout.contains(e.target) && !(e.target.closest && e.target.closest('.yb-moretool'))) this.flyout.hidden = true;
         if (!this.cpop.hidden && !this.cpop.contains(e.target) && !(e.target.closest && e.target.closest('.yvn-cmt, .yb-cbadge'))) {
           const cp = this._cp;
           this._closeCpop();
@@ -565,6 +638,10 @@
         e.preventDefault();
         this.gesture = { kind: 'pan', start, vx: this.view.x, vy: this.view.y, moved: false };
         this.vp.classList.add('yb-panning');
+      } else if (e.button === 0 && this._draw) {
+        e.preventDefault();
+        const p0 = this._toBoard(e.clientX, e.clientY);
+        this.gesture = this._draw.erase ? { kind: 'erase', start, gone: new Set() } : { kind: 'ink', start, pts: [[Math.round(p0.x), Math.round(p0.y)]] };
       } else if (e.button === 0 && this._lineMode) {
         e.preventDefault();
         this.gesture = { kind: 'line-new', start, from: this._pendingFrom || this._endAt(e, null) };
@@ -572,13 +649,13 @@
       } else if (e.button === 0 && t.closest('.yb-hnd')) {
         const h = t.closest('.yb-hnd');
         this.gesture = { kind: 'line-end', start, id: h.dataset.line, end: h.dataset.end };
-      } else if (t.closest('.yb-line, .yb-llabel')) {
-        const id = t.closest('.yb-line, .yb-llabel').dataset.id;
+      } else if (t.closest('.yb-line, .yb-llabel, .yb-inkg')) {
+        const id = t.closest('.yb-line, .yb-llabel, .yb-inkg').dataset.id;
         if (e.shiftKey || e.ctrlKey || e.metaKey) { this.sel.has(id) ? this.sel.delete(id) : this.sel.add(id); } else this.sel = new Set([id]);
         this._paintSel();
         return;
       }
-      if (this.gesture && /^(line|pan)/.test(this.gesture.kind)) { /* handled by the window listeners below */ }
+      if (this.gesture && /^(line|pan|ink|erase)/.test(this.gesture.kind)) { /* handled by the window listeners below */ }
       else if (t.closest('[data-act], a, .yb-md input')) return;
       else if (card && e.button === 0) {
         const id = card.dataset.id;
@@ -627,6 +704,13 @@
       if (gst.kind === 'pan') {
         if (Math.abs(dx) + Math.abs(dy) > 3) gst.moved = true;
         this.view.x = gst.vx + dx; this.view.y = gst.vy + dy; this._applyView();
+      } else if (gst.kind === 'ink') {
+        const q = this._toBoard(e.clientX, e.clientY), last = gst.pts[gst.pts.length - 1];
+        if (Math.hypot(q.x - last[0], q.y - last[1]) >= 2 / this.view.z) { gst.pts.push([Math.round(q.x), Math.round(q.y)]); this._renderLines(); }
+      } else if (gst.kind === 'erase') {
+        const hit = document.elementFromPoint(e.clientX, e.clientY);
+        const g = hit && hit.closest && hit.closest('.yb-inkg');
+        if (g && !gst.gone.has(g.dataset.id)) { gst.gone.add(g.dataset.id); g.style.display = 'none'; }
       } else if (gst.kind === 'line-new' || gst.kind === 'line-end') {
         gst.pt = this._toBoard(e.clientX, e.clientY);
         gst.moved = gst.moved || Math.abs(dx) + Math.abs(dy) > 4;
@@ -687,6 +771,15 @@
       if (!gst) return;
       if (gst.kind === 'pan') { if (gst.moved) this._saveView(); return; }
       if (gst.kind === 'marquee') { this.marquee.hidden = true; return; }
+      if (gst.kind === 'ink') {
+        if (gst.pts.length < 2) { this._renderLines(); return; }
+        await this.m.putItem(this.boardId, { type: 'ink', pts: gst.pts, color: this._draw.color, size: this._draw.size });
+        return this.reload();
+      }
+      if (gst.kind === 'erase') {
+        if (gst.gone.size) { await this.m.deleteItems(this.boardId, [...gst.gone]); return this.reload(); }
+        return;
+      }
       if (gst.kind === 'line-new') {
         this._lineMode = false; this.vp.classList.remove('yb-linemode');
         const to = this._endAt(e, gst.from.id);
@@ -809,6 +902,8 @@
         case 'seek': return this._seek(it.video, it.ts);
         case 'video': return this._seek(it.video, 0);
         case 'creply': return this.startEdit(it.id, { mode: 'reply' });
+        case 'play': return this._play(it, card);
+        case 'download': return this._openFile(it);
         case 'cedit': return this.startEdit(it.id, { mode: 'edit', cid: act.dataset.c });
         case 'copyhex': {
           const hex = (it.hex || '').toUpperCase();
@@ -867,10 +962,13 @@
       if (it.type === 'link') return t.closest('.yb-yt') ? window.open(it.url, '_blank', 'noopener') : this.startEdit(it.id);
       if (it.type === 'color') return this.startEdit(it.id);
       if (it.type === 'comment') return this.startEdit(it.id, { mode: 'reply' });
+      if (['heading', 'table', 'sketch', 'video', 'map', 'doc'].includes(it.type)) return this.startEdit(it.id);
+      if (it.type === 'file') return this._openFile(it);
     }
 
     _key(e) {
       if (e.target.closest('textarea, input')) return;
+      if (e.key === 'Escape' && this._draw) { this.setDraw(false); return; }
       if (e.key === 'Escape' && this._lineMode) { this._lineMode = false; this.vp.classList.remove('yb-linemode'); return; }
       if (e.key === 'Escape') { this._closeMenu(); this._closeCpop(); this.trashBox.hidden = true; this.toggleSearch(false); this.sel.clear(); this._paintSel(); return; }
       if ((e.key === 'Delete' || e.key === 'Backspace') && this.sel.size) { e.preventDefault(); this.deleteSelected(); return; }
@@ -974,6 +1072,43 @@
         inp.focus();
         return;
       }
+      if (it.type === 'heading') {
+        const inp = el('input', { class: 'yb-hinput', value: it.text || '', placeholder: '標題' });
+        inp.value = it.text || '';
+        c.querySelector('.yb-htext').replaceWith(inp);
+        return this._patchEdit(it, c, inp, () => ({ text: inp.value.trim() }), (v) => !v.text);
+      }
+      if (it.type === 'video' || it.type === 'map') {
+        const isMap = it.type === 'map';
+        const inp = el('input', { class: 'yb-input', placeholder: isMap ? '地點或地址，例如：台北 101' : '貼上 YouTube 或 Vimeo 影片網址' });
+        inp.value = isMap ? it.query || '' : it.url || '';
+        const box = el('div', { class: 'yb-editbox' }, inp, !isMap && !it.file && el('button', { class: 'yb-btn', style: 'margin-top:6px', onclick: () => { this._edit.cancel = true; this.commitEdit(); this._pickFiles('video/*', 'video', it.id); } }, '或上傳影片檔…'));
+        c.querySelector('.yb-linkbody').replaceWith(box);
+        return this._patchEdit(it, c, inp, () => (isMap ? { query: inp.value.trim() } : { url: inp.value.trim() }), (v) => (isMap ? !v.query : !v.url && !it.file));
+      }
+      if (it.type === 'table') {
+        const tbl = this._tableEl(it.rows, true);
+        const old = c.querySelector('.yb-table');
+        old.replaceWith(tbl);
+        const read = () => [...tbl.querySelectorAll('tr')].map((tr) => [...tr.children].map((td) => td.textContent.replace(/\n/g, ' ').trim()));
+        const redo = (rows) => { const n = this._tableEl(rows, true); tbl.replaceWith(n); return n; };
+        let cur = tbl;
+        const ops = el('div', { class: 'yb-tops' },
+          ...[['+ 列', (r) => { r.push(r[0].map(() => '')); }], ['+ 欄', (r) => { r.forEach((row) => row.push('')); }], ['− 列', (r) => { if (r.length > 1) r.pop(); }], ['− 欄', (r) => { if (r[0].length > 1) r.forEach((row) => row.pop()); }]]
+            .map(([label, fn]) => el('button', { class: 'yb-btn', onmousedown: (e) => e.preventDefault(), onclick: () => { const rows = readCur(); fn(rows); cur = redo2(rows); } }, label)),
+          el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, '完成'));
+        const readCur = () => [...cur.querySelectorAll('tr')].map((tr) => [...tr.children].map((td) => td.textContent.replace(/\n/g, ' ').trim()));
+        const redo2 = (rows) => { const n = this._tableEl(rows, true); cur.replaceWith(n); n.querySelector('[contenteditable]').focus(); return n; };
+        c.append(ops);
+        c.addEventListener('keydown', (e) => { if (this.editing === id) { e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); this.commitEdit(); } } });
+        void read; void redo;
+        this._edit = { it, field: 'patch', get: () => ({ rows: readCur() }), empty: () => false };
+        c.addEventListener('focusout', () => setTimeout(() => { if (this.editing === id && !c.contains(document.activeElement)) this.commitEdit(); }, 200));
+        const first = cur.querySelector('[contenteditable]'); if (first) first.focus();
+        return;
+      }
+      if (it.type === 'sketch') return this._sketchEdit(it, c);
+      if (it.type === 'doc') return this._docEdit(it, c);
       if (it.type === 'comment') {
         const mode = (opt && opt.mode) || 'reply';
         const cur = mode === 'edit' ? (it.comments || []).find((x) => x.id === opt.cid) : null;
@@ -1051,6 +1186,21 @@
       if (c) c.classList.remove('yb-editing');
       const val = ed.get();
       const it = ed.it;
+      if (ed.field === 'patch') {
+        if (ed.cancel) { /* nothing */ }
+        else if (this._fresh === id && ed.empty && ed.empty(val)) await this.m.deleteItems(this.boardId, [id]);
+        else {
+          const changed = Object.keys(val).some((k) => JSON.stringify(val[k]) !== JSON.stringify(it[k] === undefined ? (typeof val[k] === 'string' ? '' : null) : it[k]));
+          if (changed) {
+            if (val.url !== undefined && it.type === 'video' && val.url) { const vid = ytId(val.url); if (vid) val.title = await this._linkTitle(val.url); }
+            await this.m.putItem(this.boardId, { id, ...val });
+          }
+        }
+        this._fresh = null;
+        if (this._docModal) { this.fmt.container = this.root; this.root.append(this.fmt.el); this._docModal.remove(); this._docModal = null; }
+        if (c) c._sig = null;
+        return this.reload();
+      }
       if (ed.field === 'thread') {
         let list = (it.comments || []).map((x) => ({ ...x }));
         if (!ed.cancel) {
@@ -1307,12 +1457,21 @@
       if (act === 'column') return this._addColumn();
       if (act === 'color') return this._addColor();
       if (act === 'comment') return this._addComment();
+      if (act === 'heading') return this._addSimple({ type: 'heading', text: '' });
+      if (act === 'table') return this._addSimple({ type: 'table', rows: [['', '', ''], ['', '', ''], ['', '', '']] });
+      if (act === 'sketch') return this._addSimple({ type: 'sketch', strokes: [], sh: 225 });
+      if (act === 'video') return this._addSimple({ type: 'video', url: '' });
+      if (act === 'map') return this._addSimple({ type: 'map', query: '' });
+      if (act === 'doc') return this._addSimple({ type: 'doc', title: '', text: '' });
+      if (act === 'audio') return this._pickFiles('audio/*', 'audio');
+      if (act === 'upload_image') return this._pickFiles('image/*', 'image');
+      if (act === 'draw') return this.setDraw(!this._draw);
       if (act === 'line') {
         this._lineMode = true; this.vp.classList.add('yb-linemode');
         this.toast('從一張卡片（或空白處）拖曳到另一張卡片即可連線，Esc 取消');
         return;
       }
-      if (act === 'upload') return this.fileInput.click();
+      if (act === 'upload') return this._pickFiles('', 'auto');
     }
 
     async _addNote(o) {
@@ -1361,9 +1520,30 @@
       } catch (e) { this.toast(e.message || String(e)); }
     }
 
-    async _addFiles(files, at) {
+    _pickFiles(accept, kind, replaceId) {
+      this._fileKind = kind; this._fileReplace = replaceId || null;
+      this.fileInput.accept = accept || '';
+      this.fileInput.click();
+    }
+    async _addFiles(files, at, kind) {
       let pos = at ? { x: snap(at.x), y: snap(at.y) } : null;
+      const replaceId = this._fileReplace; this._fileReplace = null; this._fileKind = null;
       for (const f of files) {
+        const isImg = /^image\//.test(f.type) && kind !== 'auto-file';
+        if (!isImg) {
+          if (f.size > 25 * 1024 * 1024) { this.toast(`「${f.name}」超過 25 MB，無法上傳`); continue; }
+          const type = /^audio\//.test(f.type) ? 'audio' : /^video\//.test(f.type) ? 'video' : 'file';
+          const dataURL = await YVN.blobToDataURL(f);
+          const file = { id: YVN.uid('f_'), name: f.name, mime: f.type || 'application/octet-stream', size: f.size, fileId: null };
+          const w = YVN.CARD_W[type];
+          let it;
+          if (replaceId) it = await this.m.putItem(this.boardId, { id: replaceId, file, url: '' }, dataURL);
+          else it = await this.m.putItem(this.boardId, { type, file, w, ...(pos || this._slot(w, YVN.estimateSize({ type, w }).h)) }, dataURL);
+          pos = null;
+          await this.reload();
+          this.focusItem(it.id);
+          continue;
+        }
         const dataURL = await YVN.blobToDataURL(f);
         const im = await new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = dataURL; });
         if (!im) continue;
@@ -1446,6 +1626,176 @@
       if (kids[index]) body.insertBefore(this.colIns, kids[index]); else body.appendChild(this.colIns);
       col.classList.add('yb-coldrop');
       gst.colDrop = { col, index };
+    }
+
+    // ---------- simple editors shared by heading / video / map ----------
+    async _addSimple(o) {
+      const w = YVN.CARD_W[o.type] || 260;
+      const p = this._slot(w, YVN.estimateSize({ ...o, w }).h);
+      const it = await this.m.putItem(this.boardId, { ...o, w, ...p });
+      await this.reload();
+      this.focusItem(it.id, false);
+      this._fresh = it.id;
+      this.startEdit(it.id);
+    }
+    _patchEdit(it, c, inp, get, empty) {
+      const id = it.id;
+      inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); this.commitEdit(); } });
+      inp.addEventListener('blur', () => setTimeout(() => { if (this.editing === id && !c.contains(document.activeElement)) this.commitEdit(); }, 200));
+      inp.addEventListener('pointerdown', (e) => e.stopPropagation());
+      this._edit = { it, field: 'patch', get, empty };
+      inp.focus(); inp.select && inp.select();
+    }
+
+    // ---------- table ----------
+    _tableEl(rows, editable) {
+      rows = rows && rows.length ? rows : [['', '', ''], ['', '', ''], ['', '', '']];
+      const t = el('table', { class: 'yb-table' });
+      rows.forEach((row, i) => {
+        const tr = el('tr');
+        for (const cell of row) {
+          const td = el(i === 0 ? 'th' : 'td', editable ? { contenteditable: 'plaintext-only', spellcheck: 'false' } : {}, cell);
+          if (editable) td.addEventListener('pointerdown', (e) => e.stopPropagation());
+          tr.append(td);
+        }
+        t.append(tr);
+      });
+      return t;
+    }
+
+    // ---------- sketch card ----------
+    _sketchSvg(it, editing) {
+      const NS = 'http://www.w3.org/2000/svg';
+      const sh = it.sh || 225;
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('viewBox', `0 0 300 ${sh}`);
+      svg.setAttribute('class', 'yb-sksvg' + (editing ? ' yb-skedit' : ''));
+      for (const st of it.strokes || []) svg.append(this._skPath(st));
+      return svg;
+    }
+    _skPath(st) {
+      const pth = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      pth.setAttribute('d', st.pts.map((q, i) => (i ? 'L' : 'M') + q[0] + ',' + q[1]).join(' '));
+      pth.setAttribute('style', `stroke:${st.color};stroke-width:${st.size}px`);
+      return pth;
+    }
+    _sketchEdit(it, c) {
+      const id = it.id;
+      const strokes = (it.strokes || []).map((x) => ({ ...x }));
+      const fg = (getComputedStyle(this.root).getPropertyValue('--yb-fg') || '').trim();
+      const dark = this.root.classList.contains('yb-dark') || !!this.root.closest('.yb-dark') || /^#(f|e)/i.test(fg);
+      const state = { color: dark ? '#f1f1f3' : '#1d1d1f', size: 3, erase: false };
+      const old = c.querySelector('.yb-sksvg'); const ph = c.querySelector('.yb-skph'); if (ph) ph.remove();
+      const svg = this._sketchSvg({ ...it, strokes }, true);
+      old.replaceWith(svg);
+      const redraw = () => { svg.replaceChildren(...strokes.map((x) => this._skPath(x))); };
+      const toLocal = (e) => { const r = svg.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * 300 * 10) / 10, Math.round((e.clientY - r.top) / r.height * (it.sh || 225) * 10) / 10]; };
+      let cur = null;
+      svg.addEventListener('pointerdown', (e) => {
+        e.stopPropagation(); e.preventDefault();
+        svg.setPointerCapture(e.pointerId);
+        const p0 = toLocal(e);
+        if (state.erase) { cur = { erase: true }; eraseAt(p0); return; }
+        cur = { color: state.color, size: state.size, pts: [p0] };
+        strokes.push(cur); svg.append(this._skPath(cur));
+      });
+      const eraseAt = (q) => {
+        const n = strokes.length;
+        for (let i = strokes.length - 1; i >= 0; i--) if (strokes[i].pts.some((pp) => Math.hypot(pp[0] - q[0], pp[1] - q[1]) < 8)) strokes.splice(i, 1);
+        if (strokes.length !== n) redraw();
+      };
+      svg.addEventListener('pointermove', (e) => {
+        if (!cur) return;
+        const q = toLocal(e);
+        if (cur.erase) return eraseAt(q);
+        const l = cur.pts[cur.pts.length - 1];
+        if (Math.hypot(q[0] - l[0], q[1] - l[1]) < 1.5) return;
+        cur.pts.push(q);
+        svg.lastChild.setAttribute('d', cur.pts.map((pp, i) => (i ? 'L' : 'M') + pp[0] + ',' + pp[1]).join(' '));
+      });
+      const end = () => { if (cur && !cur.erase && cur.pts.length < 2) { cur.pts.push([cur.pts[0][0] + 0.5, cur.pts[0][1]]); redraw(); } cur = null; };
+      svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+      const colors = [dark ? '#f1f1f3' : '#1d1d1f', dark ? '#1d1d1f' : '#ffffff', '#e5484d', '#f5a524', '#30a46c', '#3e63dd', '#8e4ec6'];
+      const bar = el('div', { class: 'yb-skbar' },
+        ...colors.map((col) => el('button', { class: 'yb-swbtn' + (col === state.color ? ' on' : ''), style: `background:${col}`, 'aria-label': col, onclick: (e) => { state.color = col; state.erase = false; bar.querySelectorAll('.yb-swbtn, .yb-skerase').forEach((b) => b.classList.remove('on')); e.currentTarget.classList.add('on'); } })),
+        el('select', { class: 'yb-sksize', 'aria-label': '筆刷粗細', onchange: (e) => { state.size = +e.target.value; } }, el('option', { value: '2' }, '細'), el('option', { value: '3', selected: true }, '中'), el('option', { value: '6' }, '粗')),
+        el('button', { class: 'yb-btn yb-skerase', onclick: (e) => { state.erase = !state.erase; e.currentTarget.classList.toggle('on', state.erase); } }, '橡皮擦'),
+        el('button', { class: 'yb-btn', onclick: () => { strokes.length = 0; redraw(); } }, '清除'),
+        el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, '完成'));
+      bar.addEventListener('pointerdown', (e) => e.stopPropagation());
+      c.append(bar);
+      this._edit = { it, field: 'patch', get: () => ({ strokes }), empty: (v) => !v.strokes.length };
+      this._docOutside = null;
+    }
+
+    // ---------- document (full-screen editor) ----------
+    _docEdit(it, c) {
+      const title = el('input', { class: 'yb-doctitle-in', placeholder: '文件標題' });
+      title.value = it.title || '';
+      const ed = new YVN.RichEditor(it.text || '', { placeholder: '開始寫…（選取文字可設定格式）', onDone: () => this.commitEdit() });
+      ed.el.classList.add('yb-docbody');
+      const close = el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, '完成');
+      const modal = el('div', { class: 'yb-docmodal' }, el('div', { class: 'yb-docpage' }, el('div', { class: 'yb-docbar' }, el('span', { class: 'yb-ph' }, '文件'), el('span', { class: 'yb-grow' }), close), title, ed.el));
+      modal.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (e.target === modal) this.commitEdit(); });
+      modal.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); this.commitEdit(); } });
+      this.root.append(modal);
+      this._docModal = modal;
+      this.fmt.container = modal;
+      modal.append(this.fmt.el);
+      this.fmt.attach(ed);
+      this._edit = { it, field: 'patch', get: () => ({ title: title.value.trim(), text: ed.getMarkdown() }), empty: (v) => !v.title && !v.text };
+      if (it.title) ed.focus(); else title.focus();
+    }
+
+    // ---------- media ----------
+    async _loadMedia(it, mediaEl) {
+      if (!it.file) return;
+      try { const url = await this.api.getImage(this.boardId, it); if (url) mediaEl.src = url; } catch (e) { /* not synced yet */ }
+    }
+    async _play(it, card) {
+      const wrap = card.querySelector('.yb-vwrap, .yb-mapwrap');
+      if (!wrap) return;
+      if (it.type === 'map') {
+        if (!it.query) return this.startEdit(it.id);
+        wrap.replaceChildren(el('iframe', { src: `https://maps.google.com/maps?q=${encodeURIComponent(it.query)}&z=14&output=embed`, loading: 'lazy', referrerpolicy: 'no-referrer-when-downgrade', title: it.query }));
+        return;
+      }
+      if (it.file) {
+        const v = el('video', { controls: true, autoplay: true });
+        wrap.replaceChildren(v);
+        return this._loadMedia(it, v);
+      }
+      const vid = ytId(it.url), vimeo = /vimeo\.com\/(?:video\/)?(\d+)/.exec(it.url || '');
+      const src = vid ? `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0` : vimeo ? `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1` : null;
+      if (!src) { if (it.url) window.open(it.url, '_blank', 'noopener'); else this.startEdit(it.id); return; }
+      wrap.replaceChildren(el('iframe', { src, allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, title: it.title || '影片' }));
+    }
+    async _openFile(it) {
+      if (!it.file) return;
+      const url = await this.api.getImage(this.boardId, it);
+      if (!url) return this.toast('檔案尚未同步到這台裝置');
+      const a = el('a', { href: url, download: it.file.name, target: '_blank', rel: 'noopener' });
+      document.body.append(a); a.click(); a.remove();
+    }
+
+    // ---------- draw on the board ----------
+    _buildDrawBar() {
+      const colors = ['#f1f1f3', '#1d1d1f', '#e5484d', '#f5a524', '#30a46c', '#3e63dd', '#8e4ec6'];
+      const bar = el('div', { class: 'yb-drawbar', hidden: true });
+      const pick = (fn) => (e) => { fn(); bar.querySelectorAll('.on').forEach((b) => b.classList.remove('on')); e.currentTarget.classList.add('on'); };
+      bar.append(el('b', {}, '繪圖'),
+        ...colors.map((col, i) => el('button', { class: 'yb-swbtn' + (i === 4 ? ' on' : ''), style: `background:${col}`, 'aria-label': col, onclick: pick(() => { this._draw.color = col; this._draw.erase = false; }) })),
+        el('select', { class: 'yb-sksize', 'aria-label': '筆刷粗細', onchange: (e) => { this._draw.size = +e.target.value; } }, el('option', { value: '2' }, '細'), el('option', { value: '4', selected: true }, '中'), el('option', { value: '8' }, '粗')),
+        el('button', { class: 'yb-btn', onclick: pick(() => { this._draw.erase = true; }) }, '橡皮擦'),
+        el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.setDraw(false) }, '完成'));
+      bar.addEventListener('pointerdown', (e) => e.stopPropagation());
+      return bar;
+    }
+    setDraw(on) {
+      this._draw = on ? { color: this._draw ? this._draw.color : '#30a46c', size: 4, erase: false } : null;
+      this.drawBar.hidden = !on;
+      this.vp.classList.toggle('yb-drawmode', !!on);
+      if (on) this.toast('在白板上直接畫，按 Esc 或「完成」結束');
     }
 
     // ---------- comment threads ----------
@@ -1569,6 +1919,19 @@
         let A = this._endBox(ln.from), B = this._endBox(ln.to);
         if (gst && gst.kind === 'line-end' && gst.id === ln.id && gst.pt) { if (gst.end === 'from') A = gst.pt; else B = gst.pt; }
         draw(ln, A, B, this.sel.has(ln.id));
+      }
+      const inkPath = (pts) => pts.map((q, i) => (i ? 'L' : 'M') + q[0] + ',' + q[1]).join(' ');
+      for (const ink of YVN.liveItems(this.board)) {
+        if (ink.type !== 'ink' || !ink.pts || ink.pts.length < 2) continue;
+        const g = mk('g', { class: 'yb-inkg' + (this.sel.has(ink.id) ? ' yb-lsel' : ''), 'data-id': ink.id });
+        const d = inkPath(ink.pts);
+        g.append(mk('path', { d, class: 'yb-hit', style: `stroke-width:${(ink.size || 3) + 12}px` }), mk('path', { d, class: 'yb-inkp', style: `stroke:${ink.color || 'var(--yb-fg)'};stroke-width:${ink.size || 3}px` }));
+        this.svg.append(g);
+      }
+      if (gst && gst.kind === 'ink' && gst.pts.length > 1) {
+        const g = mk('g', { class: 'yb-inkg' });
+        g.append(mk('path', { d: inkPath(gst.pts), class: 'yb-inkp', style: `stroke:${this._draw.color};stroke-width:${this._draw.size}px` }));
+        this.svg.append(g);
       }
       if (gst && gst.kind === 'line-new' && gst.pt) draw({ arrow: 'end' }, this._endBox(gst.from), gst.pt, false, true);
     }

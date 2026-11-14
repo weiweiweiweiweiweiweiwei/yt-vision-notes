@@ -188,6 +188,7 @@
     .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/gm, '')
     .replace(/^#{1,6}\s+/gm, '').replace(/^>\s?/gm, '')
     .replace(/->|<-|\*\*|~~|\+\+|==|`/g, '').replace(/(^|\s)\*(\S)/g, '$1$2').replace(/(\S)\*(\s|$)/g, '$1$2');
+  YVN.fmtSize = (n) => (!n ? '' : n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB');
   YVN.friendlyTime = (ms) => {
     const d = Date.now() - (ms || 0), m = Math.floor(d / 60000);
     if (m < 1) return '剛剛';

@@ -275,3 +275,68 @@
 .yb-replybtn { border: 0; background: none; padding: 0; color: var(--yb-fg2) !important; font-size: 12px !important; }
 .yb-replybtn:hover { color: var(--yb-accent) !important; text-decoration: underline; }
 .yb-composer { min-height: 44px; resize: none; overflow: hidden; }
+
+/* ---------- toolbar: Milanote-like tiles, "more" flyout ---------- */
+.yb-tools .yb-tool .yb-ic { width: 40px; height: 30px; display: grid; place-items: center; border-radius: 6px; background: var(--yb-raised); }
+.yb-tools .yb-tool:hover .yb-ic { background: color-mix(in srgb, var(--yb-raised) 60%, var(--yb-accent) 25%); }
+.yb-tools .yb-tool.yb-primary .yb-ic { background: rgba(255, 255, 255, .2); }
+.yb-tools .yb-tool { font-size: 11px !important; padding: 4px 2px 6px; }
+.yb-moretool .yb-dots .yb-ic { height: 22px; }
+.yb-tsep { width: 40px; margin: 6px auto; border: 0; border-top: 1px solid var(--yb-line); }
+.yb-flyout { position: absolute; z-index: 32; display: grid; grid-template-columns: repeat(2, 84px); gap: 6px; padding: 12px; border: 1px solid var(--yb-line); border-radius: 12px; background: var(--yb-card); box-shadow: 0 12px 32px rgba(0, 0, 0, .3); }
+.yb-flyout .yb-tool { min-width: 0; padding: 8px 4px; gap: 6px; font-size: 12px !important; color: var(--yb-fg); }
+.yb-flyout .yb-tool .yb-ic { width: 48px; height: 40px; display: grid; place-items: center; border-radius: 8px; background: var(--yb-raised); }
+
+/* ---------- heading ---------- */
+.yb-heading { background: transparent; border-color: transparent; box-shadow: none; }
+.yb-heading.yb-sel { background: color-mix(in srgb, var(--yb-accent) 8%, transparent); }
+.yb-htext { padding: 4px 6px; font-size: 30px; font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+.yb-hinput { width: 100%; padding: 4px 6px; border: 0; outline: 2px solid var(--yb-accent); border-radius: 6px; background: transparent; font-size: 30px !important; font-weight: 800; line-height: 1.2; color: var(--yb-fg); }
+
+/* ---------- table ---------- */
+.yb-tablecard, .yb-table { width: 100%; }
+.yb-table { border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.yb-table th, .yb-table td { border: 1px solid var(--yb-line); padding: 6px 8px; min-height: 30px; height: 32px; vertical-align: top; overflow-wrap: anywhere; text-align: left; }
+.yb-table th { background: var(--yb-raised); font-weight: 600; }
+.yb-table [contenteditable] { outline: none; cursor: text; user-select: text; -webkit-user-select: text; }
+.yb-table [contenteditable]:focus { box-shadow: inset 0 0 0 2px var(--yb-accent); }
+.yb-tops { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; }
+
+/* ---------- sketch ---------- */
+.yb-sketch { overflow: hidden; }
+.yb-sksvg { display: block; width: 100%; height: auto; background: var(--yb-card); }
+.yb-sksvg path, .yb-inkp { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.yb-sksvg.yb-skedit { cursor: crosshair; touch-action: none; background: color-mix(in srgb, var(--yb-card) 92%, var(--yb-accent)); }
+.yb-skph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; pointer-events: none; }
+.yb-skbar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 8px; border-top: 1px solid var(--yb-line); }
+.yb-skbar .yb-swbtn.on, .yb-drawbar .yb-swbtn.on { outline: 2px solid var(--yb-accent); outline-offset: 2px; }
+.yb-skbar .yb-btn.on, .yb-drawbar .yb-btn.on { border-color: var(--yb-accent); color: var(--yb-accent) !important; }
+.yb-sksize { height: 28px; border: 1px solid var(--yb-line); border-radius: 6px; background: var(--yb-card); color: var(--yb-fg); }
+
+/* ---------- draw on board ---------- */
+.yb-inkg .yb-hit { stroke: transparent; fill: none; pointer-events: stroke; cursor: pointer; }
+.yb-inkg.yb-lsel .yb-inkp { filter: drop-shadow(0 0 3px var(--yb-accent)); }
+.yb-vp.yb-drawmode, .yb-vp.yb-drawmode * { cursor: crosshair !important; }
+.yb-drawbar { position: absolute; z-index: 33; top: 56px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--yb-line); border-radius: 10px; background: var(--yb-card); box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+.yb-drawbar b { font-size: 13px; margin-right: 4px; }
+
+/* ---------- video / map / audio / file / doc ---------- */
+.yb-vwrap, .yb-mapwrap { aspect-ratio: 16 / 9; cursor: pointer; background: #111; }
+.yb-vwrap iframe, .yb-mapwrap iframe, .yb-vwrap video { width: 100%; height: 100%; border: 0; display: block; }
+.yb-vfile { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #bbb; font-size: 12px; text-align: center; padding: 8px; }
+.yb-mapwrap { background: linear-gradient(135deg, #2c3e2f, #1f2d3a); }
+.yb-audio { padding: 10px; }
+.yb-ahead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.yb-aic { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; background: #30a46c; color: #fff; flex: none; }
+.yb-audio audio { width: 100%; height: 36px; }
+.yb-fileic { background: var(--yb-accent) !important; color: #fff !important; }
+.yb-doc { padding: 14px 14px 12px; cursor: grab; }
+.yb-docic { width: 40px; height: 48px; display: grid; place-items: center; border-radius: 6px; background: var(--yb-raised); color: var(--yb-fg2); margin-bottom: 10px; }
+.yb-doctitle { font-weight: 700; font-size: 15px; margin-bottom: 4px; overflow-wrap: anywhere; }
+.yb-docprev { color: var(--yb-fg2); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.yb-docmodal { position: absolute; inset: 0; z-index: 45; display: flex; justify-content: center; overflow-y: auto; padding: 32px 16px; background: rgba(0, 0, 0, .55); }
+.yb-docpage { width: min(760px, 100%); min-height: 80%; height: max-content; padding: 20px 40px 48px; border-radius: 12px; background: var(--yb-card); box-shadow: 0 20px 60px rgba(0, 0, 0, .4); }
+.yb-docbar { display: flex; align-items: center; margin-bottom: 12px; }
+.yb-doctitle-in { width: 100%; border: 0; outline: none; background: transparent; color: var(--yb-fg); font-size: 28px !important; font-weight: 800; margin-bottom: 12px; }
+.yb-docbody { min-height: 50vh; font-size: 15px; line-height: 1.7; }
+.yb-docmodal .yb-fmt { position: absolute; }
