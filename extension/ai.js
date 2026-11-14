@@ -9,7 +9,7 @@
   'use strict';
   const YVN = (g.YVN = g.YVN || {});
   const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/';
-  const DEFAULT_MODEL = 'gemini-2.5-flash';
+  const FALLBACK_MODEL = 'gemini-2.5-flash'; // only used when the model list cannot be fetched
 
   const SCHEMA = {
     type: 'OBJECT',
@@ -38,9 +38,51 @@
     custom: '',
   };
 
+  // ---------- models: ask Google which ones this key can use, pick the strongest ----------
+  const SKIP = /(embed|tts|image|live|audio|aqa|robotics|computer-use|native|learnlm|gemma|nano)/i;
+  /** Higher = stronger: newer version first, then Pro > Flash > Flash-Lite, stable over preview. */
+  YVN.geminiRank = (id) => {
+    const v = /gemini-(\d+(?:\.\d+)?)/i.exec(id);
+    if (!v) return -1;
+    let score = parseFloat(v[1]) * 100;
+    if (/-pro(?:-|$)/i.test(id)) score += 30;
+    else if (/lite/i.test(id)) score += 0;
+    else if (/flash/i.test(id)) score += 20;
+    if (/preview|exp|latest/i.test(id)) score -= 5;
+    return score;
+  };
+  /** [{ id, label }] of models that can generate content, strongest first. */
+  YVN.geminiModels = async (key) => {
+    const out = [];
+    let pageToken = '';
+    for (let page = 0; page < 5; page++) {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200${pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : ''}`, { headers: { 'x-goog-api-key': key } });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error((data.error && data.error.message) || `HTTP ${r.status}`);
+      for (const m of data.models || []) {
+        const id = String(m.name || '').replace(/^models\//, '');
+        if (!/^gemini/i.test(id) || SKIP.test(id)) continue;
+        if (!(m.supportedGenerationMethods || []).includes('generateContent')) continue;
+        out.push({ id, label: m.displayName || id });
+      }
+      if (!data.nextPageToken) break;
+      pageToken = data.nextPageToken;
+    }
+    return out.sort((a, b) => YVN.geminiRank(b.id) - YVN.geminiRank(a.id) || a.id.localeCompare(b.id));
+  };
+  YVN.bestGeminiModel = async (key) => {
+    const list = await YVN.geminiModels(key);
+    return list.length ? list[0].id : FALLBACK_MODEL;
+  };
+
   YVN.aiSettings = async () => {
     const r = await chrome.storage.local.get(['geminiKey', 'geminiModel']);
-    return { key: (r.geminiKey || '').trim(), model: (r.geminiModel || '').trim() || DEFAULT_MODEL };
+    const key = (r.geminiKey || '').trim();
+    let model = (r.geminiModel || '').trim().replace(/^models\//, '');
+    if (key && !/^gemini[\w.-]*$/i.test(model)) { // nothing picked yet (or something that isn't a model id)
+      try { model = await YVN.bestGeminiModel(key); await chrome.storage.local.set({ geminiModel: model }); } catch (e) { model = FALLBACK_MODEL; }
+    }
+    return { key, model: model || FALLBACK_MODEL };
   };
 
   /**
@@ -66,17 +108,29 @@
       contents: [{ role: 'user', parts: [{ fileData: { fileUri: `https://www.youtube.com/watch?v=${req.videoId}` } }, { text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.3 },
     };
-    let res;
-    try {
-      res = await fetch(`${ENDPOINT}${encodeURIComponent(model)}:generateContent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify(body),
-      });
-    } catch (e) {
-      throw new Error('Could not reach the Gemini API (check your network).');
+    const call = async (m) => {
+      let r;
+      try {
+        r = await fetch(`${ENDPOINT}${encodeURIComponent(m)}:generateContent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify(body),
+        });
+      } catch (e) {
+        throw new Error('Could not reach the Gemini API (check your network).');
+      }
+      return { res: r, data: await r.json().catch(() => ({})) };
+    };
+    let { res, data } = await call(model);
+    // the chosen model was retired or renamed: switch to the strongest model available now and retry once
+    const modelGone = (r, d) => !r.ok && (r.status === 404 || /no longer available|model name|not found|not supported for generateContent|is not available/i.test((d.error && d.error.message) || ''));
+    if (modelGone(res, data)) {
+      const best = await YVN.bestGeminiModel(key).catch(() => null);
+      if (best && best !== model) {
+        await chrome.storage.local.set({ geminiModel: best });
+        ({ res, data } = await call(best));
+      }
     }
-    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = (data.error && data.error.message) || `HTTP ${res.status}`;
       if (res.status === 400 && /API key/i.test(msg)) throw new Error('Gemini rejected the API key. Check it in the extension popup.');

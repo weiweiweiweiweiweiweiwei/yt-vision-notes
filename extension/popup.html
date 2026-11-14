@@ -14,6 +14,9 @@
   button.primary { background: #3e63dd; color: #fff; border-color: transparent; font-weight: 600; }
   button:disabled { opacity: .5; }
   label { display: block; font-size: 12px; opacity: .8; margin-bottom: 4px; }
+  select { flex: 1; min-width: 0; height: 32px; padding: 0 6px; border-radius: 8px; border: 1px solid #8886; background: transparent; color: inherit; font: inherit; }
+  select option { color: #111; }
+  button.small { flex: none; width: 36px; }
   input { width: 100%; box-sizing: border-box; height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid #8886; background: transparent; color: inherit; font: inherit; }
   #err { color: #e5484d; font-size: 12px; overflow-wrap: anywhere; }
   a { color: #3e63dd; }
@@ -41,10 +44,13 @@
   </div>
   <label for="gmodel">Gemini model</label>
   <div class="row">
-    <input id="gmodel" type="text" placeholder="gemini-2.5-flash" spellcheck="false">
+    <select id="gmodel"><option value="">Paste the API key first</option></select>
+    <button id="grefresh" class="small" title="Reload the model list from Google">↻</button>
   </div>
+  <p class="muted" id="gmsg"></p>
   <p class="muted">The key is stored only in this browser and is never synced.</p>
   <p class="muted">Click the notes icon at the bottom right of the YouTube player to open the board. Alt+S captures a frame; the panel can pop out into its own window.</p>
+  <script src="ai.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

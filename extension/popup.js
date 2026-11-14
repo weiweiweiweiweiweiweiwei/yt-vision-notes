@@ -35,7 +35,26 @@ $('open').onclick = async () => {
 chrome.runtime.onMessage.addListener((m) => { if (m.type === 'status') render({ status: m.status }); });
 refresh();
 
-// Gemini (AI notes) settings: stored locally only
-chrome.storage.local.get(['geminiKey', 'geminiModel']).then((r) => { $('gkey').value = r.geminiKey || ''; $('gmodel').value = r.geminiModel || ''; });
-$('gkey').onchange = () => chrome.storage.local.set({ geminiKey: $('gkey').value.trim() });
-$('gmodel').onchange = () => chrome.storage.local.set({ geminiModel: $('gmodel').value.trim() });
+// Gemini (AI notes) settings: stored locally only. The model list comes from Google for this key,
+// strongest first, so retired models never show up and new ones appear automatically.
+async function loadModels() {
+  const key = $('gkey').value.trim();
+  const sel = $('gmodel');
+  if (!key) { sel.replaceChildren(new Option('Paste the API key first', '')); $('gmsg').textContent = ''; return; }
+  $('gmsg').textContent = 'Loading models…';
+  try {
+    const list = await YVN.geminiModels(key);
+    const { geminiModel } = await chrome.storage.local.get('geminiModel');
+    sel.replaceChildren(...list.map((m, i) => new Option(`${m.label}${i === 0 ? '  ★ strongest' : ''}`, m.id)));
+    const keep = list.some((m) => m.id === geminiModel) ? geminiModel : list[0] && list[0].id;
+    if (keep) { sel.value = keep; await chrome.storage.local.set({ geminiModel: keep }); }
+    $('gmsg').textContent = list.length ? `${list.length} models available for this key.` : 'No usable models found for this key.';
+  } catch (e) {
+    sel.replaceChildren(new Option('Could not load models', ''));
+    $('gmsg').textContent = 'Could not load models: ' + (e.message || e);
+  }
+}
+chrome.storage.local.get(['geminiKey']).then((r) => { $('gkey').value = r.geminiKey || ''; loadModels(); });
+$('gkey').onchange = async () => { await chrome.storage.local.set({ geminiKey: $('gkey').value.trim(), geminiModel: '' }); loadModels(); };
+$('gmodel').onchange = () => chrome.storage.local.set({ geminiModel: $('gmodel').value });
+$('grefresh').onclick = loadModels;
