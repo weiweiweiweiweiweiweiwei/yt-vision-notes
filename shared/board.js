@@ -809,6 +809,13 @@
           const q = this._rectOf(it);
           if (q.x < b.x && q.x + q.w > a.x && q.y < b.y && q.y + q.h > a.y) this.sel.add(it.id);
         }
+        // lines and drawings join the selection as soon as any part of them is inside the box
+        const inBox = (x, y) => x >= a.x && x <= b.x && y >= a.y && y <= b.y;
+        for (const it of YVN.liveItems(this.board)) {
+          if (it.type === 'ink') { if ((it.pts || []).some((q) => inBox(q[0], q[1]))) this.sel.add(it.id); continue; }
+          if (it.type !== 'line') continue;
+          if (this._linePoints(it).some((q) => inBox(q.x, q.y))) this.sel.add(it.id);
+        }
         this._paintSel();
       }
     }
@@ -1599,7 +1606,7 @@
       if (act === 'draw') return this.setDraw(!this._draw);
       if (act === 'line' && this._dropAt) {
         const d = this._dropAt; this._dropAt = null;
-        const it = await this.m.putItem(this.boardId, { type: 'line', from: { x: d.x, y: d.y + 150 }, to: { x: d.x + 150, y: d.y }, arrow: 'end', color: null, label: '', bend: { a: 0, p: 0.18 } });
+        const it = await this.m.putItem(this.boardId, { type: 'line', from: { x: d.x, y: d.y + 240 }, to: { x: d.x + 240, y: d.y }, arrow: 'end', color: null, label: '', bend: null });
         await this.reload();
         this.sel = new Set([it.id]); this._paintSel();
         return;
@@ -2147,6 +2154,18 @@
       return { pa, pb, d: `M${pa.x},${pa.y} Q${C.x},${C.y} ${pb.x},${pb.y}`, ta: C, tb: C, mid: m };
     }
     /** Store a dragged middle point as a bend relative to the line (null = straight). */
+    /** Points along a line (for box selection). */
+    _linePoints(ln) {
+      const G = this._lineGeom(this._endBox(ln.from), this._endBox(ln.to), ln.bend);
+      const curved = G.ta === G.tb; // both tangents are the control point on a curve
+      const C = curved ? G.ta : { x: (G.pa.x + G.pb.x) / 2, y: (G.pa.y + G.pb.y) / 2 };
+      const out = [];
+      for (let i = 0; i <= 32; i++) {
+        const t = i / 32, u = 1 - t;
+        out.push({ x: u * u * G.pa.x + 2 * u * t * C.x + t * t * G.pb.x, y: u * u * G.pa.y + 2 * u * t * C.y + t * t * G.pb.y });
+      }
+      return out;
+    }
     _bendFrom(A, B, P) {
       const ca = this._center(A), cb = this._center(B);
       const dx = cb.x - ca.x, dy = cb.y - ca.y, L = Math.hypot(dx, dy) || 1;
@@ -2179,7 +2198,6 @@
         g.append(mk('path', { d, class: 'yb-vis', style: `stroke:${color}` }));
         if (ln.arrow === 'end' || ln.arrow === 'both') arrow(g, pb, G.ta, color);
         if (ln.arrow === 'both') arrow(g, pa, G.tb, color);
-        else if (ln.arrow === 'end') g.append(mk('circle', { cx: pa.x, cy: pa.y, r: 3.2, class: 'yb-ldot', style: `fill:${color}` }));
         if (selected && !preview) {
           const hr = 4.5 / this.view.z, hit = 9 / this.view.z;
           for (const [x, y, end] of [[pa.x, pa.y, 'from'], [pb.x, pb.y, 'to'], [G.mid.x, G.mid.y, 'mid']]) {
