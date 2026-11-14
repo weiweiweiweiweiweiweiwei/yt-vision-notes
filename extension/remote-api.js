@@ -39,7 +39,7 @@
       updateBoard: (id, patch) => send('updateBoard', { id, patch }).then((r) => r.board),
       putItem: (boardId, item, dataURL) => send('putItem', { boardId, item, dataURL }).then((r) => r.item),
       patchItems: (boardId, patches) => send('patchItems', { boardId, patches }),
-      deleteItems: (boardId, ids) => send('deleteItems', { boardId, ids }),
+      deleteItems: (boardId, ids, opts) => send('deleteItems', { boardId, ids, opts }),
       moveItems: (from, to, ids, positions) => send('moveItems', { from, to, ids, positions }),
       getImage: (boardId, item, which) => send('getImage', { image: item.image || item.file, which }).then((r) => r.dataURL),
       saveImageEdit: async (boardId, itemId, edits, blob) => send('saveImageEdit', { boardId, itemId, edits, edited: blob ? await YVN.blobToDataURL(blob) : null }),

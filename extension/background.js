@@ -125,7 +125,7 @@ const handlers = {
     return mutated({ item: await store.putItem(boardId, item, blobs) });
   },
   async patchItems({ boardId, patches }) { await store.patchItems(boardId, patches); return mutated({}); },
-  async deleteItems({ boardId, ids }) { await store.deleteItems(boardId, ids); return mutated({}); },
+  async deleteItems({ boardId, ids, opts }) { await store.deleteItems(boardId, ids, opts); return mutated({}); },
   async moveItems({ from, to, ids, positions }) { await store.moveItems(from, to, ids, positions); return mutated({}); },
   async getImage({ image, which }) {
     const blob = await store.getImageBlob(image, which, status.signedIn ? drive : null);

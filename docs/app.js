@@ -96,7 +96,7 @@
     updateBoard: mut((id, patch) => store.updateBoard(id, patch).then(strip)),
     putItem: mut(async (b, it, dataURL) => store.putItem(b, it, dataURL ? { orig: await YVN.dataURLToBlob(dataURL) } : null)),
     patchItems: mut((b, p) => store.patchItems(b, p).then(() => true)),
-    deleteItems: mut((b, ids) => store.deleteItems(b, ids)),
+    deleteItems: mut((b, ids, o) => store.deleteItems(b, ids, o)),
     moveItems: mut((f, t, ids, pos) => store.moveItems(f, t, ids, pos)),
     saveImageEdit: mut((b, id, edits, blob) => store.saveImageEdit(b, id, edits, blob).then(() => true)),
     async getImage(boardId, it, which) {

@@ -174,13 +174,15 @@
       });
     }
 
-    async deleteItems(boardId, ids) {
+    /** opts.trash: a deliberate delete (right-click → Delete) that shows up in the trash. Other deletes don't. */
+    async deleteItems(boardId, ids, opts) {
       const now = Date.now();
       const childBoards = [];
       await this._mutate(boardId, (b) => {
         for (const it of b.items) {
           if (!ids.includes(it.id) || it.deleted) continue;
           it.deleted = true; it.updatedAt = now;
+          if (opts && opts.trash) it.trashed = true; else delete it.trashed;
           if (it.type === 'board' && it.boardId) childBoards.push(it.boardId);
         }
       });
@@ -200,7 +202,7 @@
           const next = JSON.parse(JSON.stringify(sn));
           next.updatedAt = now;
           delete next.purge;
-          if (!next.deleted) delete next.moved;
+          if (!next.deleted) { delete next.moved; delete next.trashed; }
           const ki = cur && cur.image;
           if (ki && next.image && ki.id === next.image.id) {
             if (!next.image.fileId) next.image.fileId = ki.fileId || null;
@@ -228,7 +230,7 @@
       const out = [];
       for (const b of await this.listBoards()) {
         for (const it of b.items) {
-          if (!it.deleted || it.moved || it.purged || it.purge || !it.type) continue;
+          if (!it.deleted || !it.trashed || it.moved || it.purged || it.purge || !it.type) continue;
           if (Date.now() - (it.updatedAt || 0) > TRASH_MS) continue;
           out.push({ boardId: b.id, boardTitle: b.id === YVN.HOME ? 'Home' : b.title, item: strip(it), boardRefTitle: it.type === 'board' ? (sums[it.boardId] || {}).title || '' : null, deletedAt: it.updatedAt });
         }

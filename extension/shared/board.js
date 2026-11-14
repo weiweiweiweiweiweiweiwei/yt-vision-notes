@@ -1100,7 +1100,8 @@
       }
     }
 
-    async deleteSelected() {
+    /** opts.trash: put the cards in the trash (only the right-click Delete does this). */
+    async deleteSelected(opts) {
       let ids = [...this.sel];
       if (!ids.length) return;
       const live = YVN.liveItems(this.board);
@@ -1110,7 +1111,7 @@
       ids = [...all];
       const boards = ids.map((id) => this.board.items.find((i) => i.id === id)).filter((i) => i && i.type === 'board');
       if (boards.length && !confirm(`Deleting ${boards.map((b) => '"' + this._title(b.boardId) + '"').join(', ')} also deletes every card inside. Continue?`)) return;
-      await this.m.deleteItems(this.boardId, ids);
+      await this.m.deleteItems(this.boardId, ids, opts);
       this.sel.clear();
       this.reload();
     }
@@ -1140,6 +1141,7 @@
       const sel = ids.map((x) => this.board.items.find((i) => i.id === x)).filter(Boolean);
       const allLocked = sel.length && sel.every((x) => x.locked);
       const lockEntry = { label: allLocked ? 'Unlock Position' : 'Lock Position', icon: allLocked ? 'unlock' : 'lock', run: async () => { await this.m.patchItems(this.boardId, ids.map((x) => ({ id: x, locked: !allLocked }))); this.reload(); } };
+      const delEntry = { label: 'Delete', icon: 'trash', danger: true, run: () => this.deleteSelected({ trash: true }) }; // the only delete that goes to the trash
       const colorEntry = {
         colors: [null, ...YVN.BOARD_COLORS],
         pick: async (c) => {
@@ -1150,7 +1152,7 @@
       };
       if (!multi && it.type === 'column') {
         // columns: only what's needed (rename by double-clicking the title, delete with the Delete key)
-        return this._menuAt(anchor, [lockEntry, { label: 'Draw line from this card', icon: 'line', run: () => this._startLineFrom(it.id) }, colorEntry]);
+        return this._menuAt(anchor, [lockEntry, { label: 'Draw line from this card', icon: 'line', run: () => this._startLineFrom(it.id) }, colorEntry, { sep: true }, delEntry]);
       }
       if (!multi) {
         if (it.type === 'board') entries.push({ label: 'Open', icon: 'board', run: () => this.open(it.boardId) });
@@ -1169,7 +1171,7 @@
       }
       const boardsHere = YVN.liveItems(this.board).filter((x) => x.type === 'board' && !ids.includes(x.id));
       if (boardsHere.length) entries.push({ label: 'Move to board…', icon: 'board', run: () => this._menuAt(anchor, boardsHere.map((b) => ({ label: this._title(b.boardId), icon: 'board', run: () => this._moveInto(ids, b.boardId) }))) });
-      entries.push({ sep: true }, lockEntry, colorEntry);
+      entries.push({ sep: true }, lockEntry, colorEntry, { sep: true }, delEntry);
       this._menuAt(anchor, entries);
     }
 
@@ -1507,7 +1509,7 @@
       this.trashBox.replaceChildren(
         el('div', { class: 'yb-srow yb-thead' },
           el('b', { class: 'yb-ttl' }, 'Trash'),
-          el('small', { class: 'yb-tnote' }, 'Deleted cards are kept for 30 days'),
+          el('small', { class: 'yb-tnote' }, 'Cards deleted with right-click → Delete are kept here for 30 days'),
           list.length > 0 && el('button', { class: 'yb-btn yb-danger', onclick: async () => {
             if (!confirm(`Permanently delete ${list.length} cards in the trash? This can't be undone.`)) return;
             await this.api.purgeTrash(list.map((t) => ({ boardId: t.boardId, itemId: t.item.id })));
