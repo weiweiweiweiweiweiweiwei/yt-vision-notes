@@ -339,6 +339,7 @@
       this.view.y = cy - (cy - this.view.y) * (z / this.view.z);
       this.view.z = z;
       this._applyView(); this._saveView();
+      if ([...this.sel].some((id) => (this.board.items.find((i) => i.id === id) || {}).type === 'line')) this._renderLines();
     }
     _rectOf(it) {
       if (it.type === 'line' || it.type === 'ink') return { x: 0, y: 0, w: 0, h: 0 };
@@ -2068,10 +2069,13 @@
         if (ln.arrow === 'both') arrow(g, pa, G.tb, color);
         else if (ln.arrow === 'end') g.append(mk('circle', { cx: pa.x, cy: pa.y, r: 3.2, class: 'yb-ldot', style: `fill:${color}` }));
         if (selected && !preview) {
-          g.append(mk('circle', { cx: pa.x, cy: pa.y, r: 6, class: 'yb-hnd', 'data-line': ln.id, 'data-end': 'from' }));
-          g.append(mk('circle', { cx: pb.x, cy: pb.y, r: 6, class: 'yb-hnd', 'data-line': ln.id, 'data-end': 'to' }));
+          const hr = 4.5 / this.view.z, hit = 9 / this.view.z;
+          for (const [x, y, end] of [[pa.x, pa.y, 'from'], [pb.x, pb.y, 'to'], [G.mid.x, G.mid.y, 'mid']]) {
+            // invisible larger circle = easy to grab; small solid dot = what you see
+            g.append(mk('circle', { cx: x, cy: y, r: hit, class: 'yb-hnd yb-hhit' + (end === 'mid' ? ' yb-hmid' : ''), 'data-line': ln.id, 'data-end': end }));
+            g.append(mk('circle', { cx: x, cy: y, r: hr, class: 'yb-hdot' }));
+          }
           // middle handle: drag to bend the line into a curve, double-click to straighten
-          g.append(mk('circle', { cx: G.mid.x, cy: G.mid.y, r: 5.5, class: 'yb-hnd yb-hmid', 'data-line': ln.id, 'data-end': 'mid' }));
         }
         this.svg.append(g);
         if (ln.label && !preview) {

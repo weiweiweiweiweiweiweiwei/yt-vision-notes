@@ -214,8 +214,8 @@
 .yb-trow > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
 /* ---------- columns ---------- */
-.yb { --yb-linec: #8b8d98; --yb-colbg: #e9e9e6; }
-.yb.yb-dark, .yb-dark .yb { --yb-linec: #9a9ba3; --yb-colbg: #232428; }
+.yb { --yb-linec: #6f7076; --yb-hndc: #3a3b40; --yb-colbg: #e9e9e6; }
+.yb.yb-dark, .yb-dark .yb { --yb-linec: #d4d4d8; --yb-hndc: #ffffff; --yb-colbg: #232428; }
 .yb-column { background: var(--yb-colbg); padding: 0 10px 10px; border-radius: 8px; }
 .yb-colhead { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 16px 10px 12px; text-align: center; cursor: grab; }
 .yb-coltitle { max-width: 100%; font-weight: 700; font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; }
@@ -246,9 +246,10 @@
 .yb-lines { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
 .yb-lines .yb-hit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; cursor: pointer; }
 .yb-lines .yb-vis { fill: none; stroke-width: 2.5; stroke-linecap: round; }
-.yb-lines .yb-lsel .yb-vis { stroke-width: 3.5; filter: drop-shadow(0 0 3px var(--yb-accent)); }
+.yb-lines .yb-lsel .yb-vis { stroke-width: 2.5; }
 .yb-lines .yb-lprev .yb-vis { stroke-dasharray: 6 5; }
-.yb-lines .yb-hnd { fill: var(--yb-card); stroke: var(--yb-accent); stroke-width: 2.5; pointer-events: all; cursor: move; }
+.yb-lines .yb-hnd { fill: transparent; stroke: none; pointer-events: all; cursor: move; }
+.yb-lines .yb-hdot { fill: var(--yb-hndc); stroke: none; pointer-events: none; }
 .yb-llabels { position: absolute; left: 0; top: 0; }
 .yb-llabel { position: absolute; transform: translate(-50%, -50%); max-width: 220px; padding: 2px 8px; border-radius: 5px; background: var(--yb-bg); border: 1px solid var(--yb-line); color: var(--yb-fg); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; z-index: 1; }
 .yb-llabel.yb-lsel { border-color: var(--yb-accent); }
@@ -379,5 +380,5 @@ button.yb-playbadge:hover { background: #e5484d; transform: translate(-50%, -50%
 .yb-colcollapsed { min-height: 0 !important; }
 
 /* curved lines: middle handle bends the line */
-.yb-lines .yb-hmid { fill: var(--yb-accent); stroke: var(--yb-card); stroke-width: 2; cursor: grab; }
+.yb-lines .yb-hmid { cursor: grab; }
 .yb-lines .yb-ldot { pointer-events: none; }
