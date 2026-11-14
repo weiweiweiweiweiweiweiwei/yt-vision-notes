@@ -17,7 +17,7 @@
   const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
   const done = (tx) => new Promise((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error('tx aborted')); });
   const strip = (v) => { const o = {}; for (const k in v) if (k[0] !== '_') o[k] = v[k]; return o; };
-  const ITEM_KEYS = ['x', 'y', 'w', 'color', 'text', 'title', 'url', 'ts', 'video', 'image', 'boardId', 'comments', 'col', 'ord', 'from', 'to', 'arrow', 'label', 'hex', 'name'];
+  const ITEM_KEYS = ['x', 'y', 'w', 'color', 'text', 'title', 'url', 'ts', 'video', 'image', 'boardId', 'comments', 'col', 'ord', 'from', 'to', 'arrow', 'label', 'hex', 'name', 'rows', 'strokes', 'sh', 'pts', 'size', 'query', 'file'];
   const TRASH_MS = 30 * 24 * 3600 * 1000; // deleted cards keep their images this long (restorable from the trash)
 
   class Store {
@@ -143,14 +143,16 @@
     async putItem(boardId, it, blobs) {
       const now = Date.now();
       const id = it.id || YVN.uid('i_');
-      if (blobs && blobs.orig && it.image) await this._putBlob(it.image.id, 'orig', blobs.orig, true, now);
+      const media = it.image || it.file; // pictures and uploaded files share the blob store
+      if (blobs && blobs.orig && media) await this._putBlob(media.id, 'orig', blobs.orig, true, now);
       let saved = null;
       await this._mutate(boardId, (b) => {
         let cur = b.items.find((x) => x.id === id);
         if (!cur) { cur = { id, type: it.type, createdAt: it.createdAt || now }; b.items.push(cur); }
-        const prevImg = cur.image;
+        const prevImg = cur.image, prevFile = cur.file;
         for (const k of ITEM_KEYS) if (it[k] !== undefined) cur[k] = it[k];
         if (prevImg && it.image) cur.image = { ...prevImg, ...it.image };
+        if (prevFile && it.file) cur.file = { ...prevFile, ...it.file };
         cur.updatedAt = now; cur.deleted = false;
         saved = { ...cur };
       });
@@ -503,26 +505,27 @@
         for (const it of b.items) {
           for (const fid of it.removedFiles || []) await drive.trash(fid);
           it.removedFiles = [];
-          const img = it.image;
+          const img = it.image || it.file;
           if (it.deleted) {
             // moved cards: the image lives on in the target board. Trashed cards keep their image until
             // the trash is emptied or 30 days pass, so they can still be restored.
-            if (img && it.moved) { it.purged = true; delete it.image; }
+            if (img && it.moved) { it.purged = true; delete it.image; delete it.file; }
             else if (img && !it.purged && (it.purge || Date.now() - (it.updatedAt || 0) > TRASH_MS)) {
               if (img.fileId) await drive.trash(img.fileId);
               if (img.editedFileId) await drive.trash(img.editedFileId);
               await this._delBlob(img.id);
-              it.purged = true; delete it.image;
+              it.purged = true; delete it.image; delete it.file;
             }
             continue;
           }
           if (!img) continue;
           const o = await this._getBlob(img.id, 'orig');
           if (o && (o.dirty || !img.fileId)) {
-            img.fileId = await drive.upload(`${img.id}.webp`, layout.images, o.blob, img.fileId);
+            const fname = it.file ? `${img.id}-${String(it.file.name || 'file').replace(/[\/:*?"<>|]/g, '_')}` : `${img.id}.webp`;
+            img.fileId = await drive.upload(fname, layout.images, o.blob, img.fileId);
             cleaned.push([img.id, 'orig', o]);
           }
-          if (img.edits) {
+          if (it.image && img.edits) {
             const e = await this._getBlob(img.id, 'edit');
             if (e && (e.dirty || !img.editedFileId)) {
               img.editedFileId = await drive.upload(`${img.id}.edit.webp`, layout.images, e.blob, img.editedFileId);

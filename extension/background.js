@@ -73,6 +73,7 @@ async function signOut() {
     await fetch('https://oauth2.googleapis.com/revoke?token=' + t, { method: 'POST' });
   } catch (e) { /* already signed out */ }
   lastToken = null; status.signedIn = false;
+  await store.kvDel('me');
   await chrome.storage.local.set({ signedIn: false });
   pushStatus();
 }
@@ -139,6 +140,15 @@ const handlers = {
   async trash() { return { list: await store.trash() }; },
   async restoreFromTrash({ boardId, itemId }) { await store.restoreFromTrash(boardId, itemId); return mutated({}); },
   async purgeTrash({ entries }) { await store.purgeTrash(entries); return mutated({}); },
+  async me() {
+    const cached = await store.kvGet('me');
+    if (cached) return { me: cached };
+    if (!status.signedIn) return { me: null };
+    const u = (await (await drive.request('https://www.googleapis.com/drive/v3/about?fields=user(displayName,photoLink)')).json()).user || {};
+    const me = { name: u.displayName || '', photo: u.photoLink || '' };
+    await store.kvSet('me', me);
+    return { me };
+  },
   async search({ q }) { return { results: await store.search(q) }; },
   async recent() { return { ids: await store.recent() }; },
   async touchRecent({ id }) { await store.touchRecent(id); return {}; },

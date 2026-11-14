@@ -136,6 +136,7 @@
         ['column', 'column', '欄', '欄：把卡片收成一直排，可整欄移動'],
         ['line', 'line', '連線', '在卡片之間拉線或箭頭'],
         ['color', 'swatch', '色票', '顏色色票卡（點色碼即可複製）'],
+        ['comment', 'comment', '留言', '留言串：可回覆、可放進欄裡'],
         ['upload', 'image', '圖片', '上傳圖片（也可以貼上或拖曳）'],
       ].filter(Boolean);
       const btn = ([act, ic, label, title]) => el('button', { class: 'yb-tool' + (act === 'shot' ? ' yb-primary' : ''), title, dataset: { tool: act }, onclick: () => this.tool(act) }, icon(ic, 20), el('span', {}, label));
@@ -188,7 +189,7 @@
       if (!q) return;
       const res = await this.api.search(q);
       if (!res.length) { this.sList.append(el('li', { class: 'yb-snone' }, '找不到符合的筆記')); return; }
-      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票' };
+      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票', comment: '留言' };
       for (const r of res) {
         const text = (r.text || '').replace(/\s+/g, ' ');
         this.sList.append(el('li', { tabindex: '0', onclick: () => { this.toggleSearch(false); this.open(r.type === 'board' && !r.itemId ? r.boardId : r.boardId, r.itemId); } },
@@ -400,7 +401,7 @@
         }
         body.classList.toggle('yb-colempty', !list.length);
         const cnt = ce.querySelector('.yb-colcount');
-        if (cnt) cnt.textContent = list.length ? String(list.length) : '';
+        if (cnt) cnt.textContent = `${list.length} 張卡片`;
       }
       for (const [id, e] of this.els) if (!keep.has(id)) { e.remove(); this.els.delete(id); this.sel.delete(id); }
       for (const id of [...this.sel]) if (!keep.has(id)) this.sel.delete(id);
@@ -446,6 +447,10 @@
           el('span', { class: 'yb-coltitle' + (it.title ? '' : ' yb-ph') }, it.title || '未命名欄'),
           el('small', { class: 'yb-colcount' }, '')),
         el('div', { class: 'yb-colbody' }));
+      } else if (it.type === 'comment') {
+        const thread = el('div', { class: 'yb-thread' });
+        for (const cm of it.comments || []) thread.append(this._commentLine(cm));
+        c.append(thread, el('div', { class: 'yb-cform' }, el('button', { class: 'yb-replybtn', dataset: { act: 'creply' } }, (it.comments || []).length ? '回覆' : '輸入留言…')));
       } else if (it.type === 'color') {
         c.append(el('div', { class: 'yb-swatch', style: `background:${it.hex || '#8b8d98'}` }),
           el('div', { class: 'yb-swfoot' },
@@ -458,7 +463,7 @@
           !vid && el('span', { class: 'yb-linkic' }, icon('link', 18)),
           el('div', { class: 'yb-linktxt' }, el('a', { href: it.url || '#', target: '_blank', rel: 'noopener noreferrer', dataset: { act: 'open' } }, it.title || it.url || '（空白連結）'), el('small', {}, host(it.url)))));
       }
-      const nc = (it.comments || []).length;
+      const nc = it.type === 'comment' ? 0 : (it.comments || []).length;
       if (nc) c.append(el('button', { class: 'yb-cbadge', title: `${nc} 則留言`, dataset: { act: 'comments' } }, icon('comment', 13), String(nc)));
       c.append(el('button', { class: 'yb-more', title: '選單', 'aria-label': '卡片選單', dataset: { act: 'menu' } }, icon('more', 16)));
       if (it.type !== 'board') c.append(el('div', { class: 'yb-rs', title: '拖曳調整寬度' }));
@@ -523,6 +528,20 @@
         else if (t) { e.preventDefault(); this._addNote({ text: t, edit: false }); }
       });
       this.root.addEventListener('keydown', (e) => this._key(e));
+      // no browser auto-scroll on middle click; middle drag pans the board instead
+      vp.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+      vp.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
+      // hold Space + left drag to pan (not in the YouTube panel, where Space plays/pauses the video)
+      if (this.mode !== 'panel') {
+        const typing = (t) => t && t.closest && t.closest('input, textarea, [contenteditable="true"]');
+        window.addEventListener('keydown', (e) => {
+          if (e.code !== 'Space' || e.repeat || typing(e.target) || !this.root.isConnected || document.querySelector('.yvne-root')) return;
+          e.preventDefault();
+          this._space = true; this.vp.classList.add('yb-spacepan');
+        });
+        window.addEventListener('keyup', (e) => { if (e.code === 'Space') { this._space = false; this.vp.classList.remove('yb-spacepan'); } });
+        window.addEventListener('blur', () => { this._space = false; this.vp.classList.remove('yb-spacepan'); });
+      }
       document.addEventListener('pointerdown', (e) => {
         if (!this.menu.hidden && !this.menu.contains(e.target)) this._closeMenu();
         if (!this.cpop.hidden && !this.cpop.contains(e.target) && !(e.target.closest && e.target.closest('.yvn-cmt, .yb-cbadge'))) {
@@ -542,7 +561,11 @@
       const card = t.closest('.yb-item');
       if (this.editing && (!card || card.dataset.id !== this.editing)) this.commitEdit();
       const start = { x: e.clientX, y: e.clientY };
-      if (e.button === 0 && this._lineMode) {
+      if (e.button === 1 || (e.button === 0 && this._space)) {
+        e.preventDefault();
+        this.gesture = { kind: 'pan', start, vx: this.view.x, vy: this.view.y, moved: false };
+        this.vp.classList.add('yb-panning');
+      } else if (e.button === 0 && this._lineMode) {
         e.preventDefault();
         this.gesture = { kind: 'line-new', start, from: this._pendingFrom || this._endAt(e, null) };
         this._pendingFrom = null;
@@ -555,7 +578,7 @@
         this._paintSel();
         return;
       }
-      if (this.gesture && /^line/.test(this.gesture.kind)) { /* handled by the window listeners below */ }
+      if (this.gesture && /^(line|pan)/.test(this.gesture.kind)) { /* handled by the window listeners below */ }
       else if (t.closest('[data-act], a, .yb-md input')) return;
       else if (card && e.button === 0) {
         const id = card.dataset.id;
@@ -579,12 +602,10 @@
           for (const [sid] of orig) { const it = this.board.items.find((i) => i.id === sid); if (it && it.col && orig.has(it.col)) orig.delete(sid); }
           this.gesture = { kind: 'drag', id, start, orig, lines, moved: false };
         }
-      } else if (e.shiftKey && e.button === 0) {
+      } else if (e.button === 0) {
+        // empty canvas: drag = rectangle selection (Shift/Ctrl adds to the current selection)
+        if (!(e.shiftKey || e.ctrlKey || e.metaKey)) { this.sel.clear(); this._paintSel(); }
         this.gesture = { kind: 'marquee', start, base: new Set(this.sel) };
-      } else {
-        if (!e.shiftKey) { this.sel.clear(); this._paintSel(); }
-        this.gesture = { kind: 'pan', start, vx: this.view.x, vy: this.view.y, moved: false };
-        this.vp.classList.add('yb-panning');
       }
       // track on window (not pointer capture) so click/dblclick keep their natural targets
       const mv = (ev) => this._move(ev);
@@ -787,6 +808,8 @@
       switch (act.dataset.act) {
         case 'seek': return this._seek(it.video, it.ts);
         case 'video': return this._seek(it.video, 0);
+        case 'creply': return this.startEdit(it.id, { mode: 'reply' });
+        case 'cedit': return this.startEdit(it.id, { mode: 'edit', cid: act.dataset.c });
         case 'copyhex': {
           const hex = (it.hex || '').toUpperCase();
           if (navigator.clipboard) navigator.clipboard.writeText(hex).then(() => this.toast('已複製 ' + hex), () => this.toast(hex));
@@ -843,6 +866,7 @@
       }
       if (it.type === 'link') return t.closest('.yb-yt') ? window.open(it.url, '_blank', 'noopener') : this.startEdit(it.id);
       if (it.type === 'color') return this.startEdit(it.id);
+      if (it.type === 'comment') return this.startEdit(it.id, { mode: 'reply' });
     }
 
     _key(e) {
@@ -933,7 +957,7 @@
     }
 
     // ---------- inline editing ----------
-    startEdit(id) {
+    startEdit(id, opt) {
       const it = this.board.items.find((i) => i.id === id);
       const c = this.els.get(id);
       if (!it || !c) return;
@@ -948,6 +972,33 @@
         this._edit = { it, get: () => inp.value.trim(), field: 'url' };
         inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); this.commitEdit(); } });
         inp.focus();
+        return;
+      }
+      if (it.type === 'comment') {
+        const mode = (opt && opt.mode) || 'reply';
+        const cur = mode === 'edit' ? (it.comments || []).find((x) => x.id === opt.cid) : null;
+        const ta = el('textarea', { class: 'yb-cpop-ta yb-composer', rows: '2', placeholder: mode === 'edit' ? '編輯留言…' : (it.comments || []).length ? '回覆…' : '輸入留言…' });
+        ta.value = cur ? cur.text : '';
+        const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; this._renderLines(); };
+        ta.addEventListener('input', grow);
+        const box = el('div', { class: 'yb-cform yb-editbox' }, ta,
+          el('div', { class: 'yb-cpop-act' },
+            mode === 'edit' && el('button', { class: 'yb-btn yb-danger', onclick: () => { ta.value = ''; this.commitEdit(); } }, '刪除'),
+            el('button', { class: 'yb-btn', onclick: () => { this._edit.cancel = true; this.commitEdit(); } }, '取消'),
+            el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, mode === 'edit' ? '儲存' : '送出')));
+        if (cur) {
+          const line = c.querySelector(`.yb-cline[data-c="${cur.id}"] .yb-ctext`);
+          if (line) line.replaceWith(box); else c.querySelector('.yb-cform').replaceWith(box);
+          const f = c.querySelector('.yb-cform:not(.yb-editbox)'); if (f) f.hidden = true;
+        } else c.querySelector('.yb-cform').replaceWith(box);
+        ta.addEventListener('keydown', (e) => {
+          e.stopPropagation();
+          if (e.key === 'Escape') { e.preventDefault(); this._edit.cancel = true; this.commitEdit(); }
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.commitEdit(); }
+        });
+        box.addEventListener('focusout', () => setTimeout(() => { if (this.editing === id && !box.contains(document.activeElement)) this.commitEdit(); }, 200));
+        this._edit = { it, get: () => ta.value.trim(), field: 'thread', mode, cid: cur && cur.id };
+        grow(); ta.focus();
         return;
       }
       if (it.type === 'color') {
@@ -1000,6 +1051,22 @@
       if (c) c.classList.remove('yb-editing');
       const val = ed.get();
       const it = ed.it;
+      if (ed.field === 'thread') {
+        let list = (it.comments || []).map((x) => ({ ...x }));
+        if (!ed.cancel) {
+          const now = Date.now();
+          if (ed.mode === 'edit') {
+            list = val ? list.map((x) => (x.id === ed.cid ? { ...x, text: val, updatedAt: now } : x)) : list.filter((x) => x.id !== ed.cid);
+          } else if (val) {
+            list.push({ id: YVN.uid('c_'), text: val, createdAt: now, updatedAt: now, author: await this._me() });
+          }
+        }
+        if (!list.length) await this.m.deleteItems(this.boardId, [id]); // an empty thread disappears
+        else if (JSON.stringify(list) !== JSON.stringify(it.comments || [])) await this.m.putItem(this.boardId, { id, comments: list });
+        this._fresh = null;
+        if (c) c._sig = null;
+        return this.reload();
+      }
       if (ed.field === 'swatch') {
         if (val.hex !== it.hex || val.name !== (it.name || '')) await this.m.putItem(this.boardId, { id, hex: val.hex, name: val.name });
         this._fresh = null;
@@ -1149,7 +1216,7 @@
     async openTrash() {
       this._closeMenu();
       const list = await this.api.trash();
-      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票' };
+      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票', comment: '留言' };
       const rows = list.map((t) => {
         const it = t.item;
         const text = String(it.type === 'board' ? t.boardRefTitle || '' : YVN.itemText(it)).replace(/\s+/g, ' ');
@@ -1239,6 +1306,7 @@
       if (act === 'link') return this._addLink('');
       if (act === 'column') return this._addColumn();
       if (act === 'color') return this._addColor();
+      if (act === 'comment') return this._addComment();
       if (act === 'line') {
         this._lineMode = true; this.vp.classList.add('yb-linemode');
         this.toast('從一張卡片（或空白處）拖曳到另一張卡片即可連線，Esc 取消');
@@ -1378,6 +1446,41 @@
       if (kids[index]) body.insertBefore(this.colIns, kids[index]); else body.appendChild(this.colIns);
       col.classList.add('yb-coldrop');
       gst.colDrop = { col, index };
+    }
+
+    // ---------- comment threads ----------
+    async _addComment() {
+      const p = this._slot(YVN.CARD_W.comment, 120);
+      const it = await this.m.putItem(this.boardId, { type: 'comment', comments: [], w: YVN.CARD_W.comment, ...p });
+      await this.reload();
+      this.focusItem(it.id, false);
+      this._fresh = it.id;
+      this.startEdit(it.id, { mode: 'reply' });
+    }
+    /** Who is writing: Google account name/photo when signed in, otherwise "我". */
+    async _me() {
+      if (this._meCache) return this._meCache;
+      let me = null;
+      try { me = this.api.me ? await this.api.me() : null; } catch (e) { me = null; }
+      this._meCache = me && me.name ? { name: me.name, photo: me.photo || '' } : { name: '我', photo: '' };
+      return this._meCache;
+    }
+    _commentLine(cm) {
+      const a = cm.author || { name: '我' };
+      const initial = (a.name || '我').trim().slice(0, 1).toUpperCase();
+      const av = el('div', { class: 'yb-avatar', 'aria-hidden': 'true' }, initial);
+      if (a.photo) {
+        const img = el('img', { src: a.photo, alt: '', referrerpolicy: 'no-referrer', draggable: 'false' });
+        img.onerror = () => img.remove();
+        av.append(img);
+      }
+      return el('div', { class: 'yb-cline', dataset: { c: cm.id } }, av,
+        el('div', { class: 'yb-cdetails' },
+          el('div', { class: 'yb-chead' },
+            el('b', {}, a.name || '我'),
+            el('small', { title: new Date(cm.createdAt || Date.now()).toLocaleString() }, YVN.friendlyTime(cm.updatedAt && cm.updatedAt !== cm.createdAt ? cm.updatedAt : cm.createdAt) + (cm.updatedAt && cm.updatedAt !== cm.createdAt ? '（已編輯）' : '')),
+            el('button', { class: 'yb-cedit', dataset: { act: 'cedit', c: cm.id } }, '編輯')),
+          el('div', { class: 'yb-ctext yvn-md', html: YVN.renderMarkdown(cm.text || '') })));
     }
 
     // ---------- color swatches ----------

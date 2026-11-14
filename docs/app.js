@@ -100,7 +100,7 @@
     moveItems: mut((f, t, ids, pos) => store.moveItems(f, t, ids, pos)),
     saveImageEdit: mut((b, id, edits, blob) => store.saveImageEdit(b, id, edits, blob).then(() => true)),
     async getImage(boardId, it, which) {
-      const img = it.image;
+      const img = it.image || it.file;
       if (!img) return null;
       const w = which || (img.edits ? 'edit' : 'orig');
       const key = `${img.id}:${w}:${img.editedAt || 0}`;
@@ -115,6 +115,14 @@
     trash: () => store.trash(),
     restoreFromTrash: mut((b, id) => store.restoreFromTrash(b, id)),
     purgeTrash: mut((entries) => store.purgeTrash(entries)),
+    async me() {
+      try { const c = JSON.parse(localStorage.getItem('yvnMe') || 'null'); if (c) return c; } catch (e) { /* ignore */ }
+      if (!tokenValid()) return null;
+      const u = (await (await drive.request('https://www.googleapis.com/drive/v3/about?fields=user(displayName,photoLink)')).json()).user || {};
+      const me = { name: u.displayName || '', photo: u.photoLink || '' };
+      localStorage.setItem('yvnMe', JSON.stringify(me));
+      return me;
+    },
     search: (q) => store.search(q),
     recent: () => store.recent(),
     touchRecent: (id) => store.touchRecent(id),
@@ -172,7 +180,7 @@
     const dlg = $('#dlg');
     const signOut = () => {
       if (token && window.google) google.accounts.oauth2.revoke(token.value, () => {});
-      token = null; localStorage.removeItem('yvnToken'); localStorage.removeItem('yvnSignedIn'); renderSync(); draw();
+      token = null; localStorage.removeItem('yvnToken'); localStorage.removeItem('yvnSignedIn'); localStorage.removeItem('yvnMe'); renderSync(); draw();
     };
     const draw = () => {
       const cid = el('input', { class: 'inp', id: 'cid', value: clientId(), placeholder: 'xxxxxxxx.apps.googleusercontent.com', spellcheck: 'false' });
@@ -185,9 +193,10 @@
         el('p', { class: 'muted' }, '只存在這個瀏覽器。' + (tokenValid() ? '目前已登入。' : '')),
         el('h3', {}, '操作方式'),
         el('ul', { class: 'help' },
-          el('li', {}, '拖曳空白處或滾輪：移動畫布；Ctrl + 滾輪：縮放'),
+          el('li', {}, '滾輪、按住滑鼠中鍵拖曳、或按住空白鍵拖曳：移動畫布；Ctrl + 滾輪：縮放'),
+          el('li', {}, '在空白處用左鍵拖曳：框選多張卡片（按住 Shift 可加選）'),
           el('li', {}, '雙擊空白處：新增筆記；雙擊卡片：編輯；雙擊截圖：開啟標註編輯器'),
-          el('li', {}, '把卡片拖到 Board 上：移進那個 Board；Shift + 拖曳：框選多張'),
+          el('li', {}, '把卡片拖到 Board 上：移進那個 Board'),
           el('li', {}, '可直接貼上或拖入圖片、網址；Delete 刪除選取的卡片')),
         el('div', { class: 'actions' },
           localStorage.getItem('yvnSignedIn') && el('button', { class: 'btn danger', onclick: signOut }, '登出 Google'),

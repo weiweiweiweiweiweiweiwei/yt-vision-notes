@@ -164,7 +164,7 @@
   //   video = { id, title, channel }
   // =====================================================================================
   YVN.BOARD_COLORS = ['#e5484d', '#f76b15', '#f5a524', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#8b8d98'];
-  YVN.CARD_W = { note: 260, shot: 240, image: 240, board: 120, link: 240, column: 300, color: 160 };
+  YVN.CARD_W = { note: 260, shot: 240, image: 240, board: 120, link: 240, column: 300, color: 160, comment: 280, heading: 420, table: 380, sketch: 300, video: 360, map: 320, file: 260, audio: 300, doc: 240 };
 
   YVN.emptyBoard = (id, title, parentId) => {
     const now = Date.now();
@@ -188,9 +188,22 @@
     .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/gm, '')
     .replace(/^#{1,6}\s+/gm, '').replace(/^>\s?/gm, '')
     .replace(/->|<-|\*\*|~~|\+\+|==|`/g, '').replace(/(^|\s)\*(\S)/g, '$1$2').replace(/(\S)\*(\s|$)/g, '$1$2');
-  YVN.itemText = (it) => [YVN.plainText(it.text), it.title, it.url, it.video && it.video.title, it.name, it.hex, it.label].filter(Boolean).join(' ');
+  YVN.friendlyTime = (ms) => {
+    const d = Date.now() - (ms || 0), m = Math.floor(d / 60000);
+    if (m < 1) return '剛剛';
+    if (m < 60) return `${m} 分鐘前`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} 小時前`;
+    const days = Math.floor(h / 24);
+    if (days < 7) return `${days} 天前`;
+    const t = new Date(ms);
+    return `${t.getFullYear()}/${t.getMonth() + 1}/${t.getDate()}`;
+  };
+  YVN.itemText = (it) => [YVN.plainText(it.text), it.type === 'comment' ? (it.comments || []).map((c) => c.text).join(' ') : '', it.rows ? it.rows.flat().join(' ') : '', it.file && it.file.name, it.query, it.title, it.url, it.video && it.video.title, it.name, it.hex, it.label].filter(Boolean).join(' ');
 
   function mergeItem(win, lose) {
+    const fa = win.file, fb = lose.file;
+    if (fa && fb && fa.id === fb.id && !fa.fileId && fb.fileId) fa.fileId = fb.fileId;
     const a = win.image, b = lose.image;
     if (a && b && a.id === b.id) {
       if (!a.fileId && b.fileId) a.fileId = b.fileId;
@@ -233,6 +246,14 @@
     else if (it.type === 'line') return { w: 0, h: 0 };
     else if (it.type === 'column') h = 300;
     else if (it.type === 'color') h = 160;
+    else if (it.type === 'comment') h = 60 + (it.comments || []).length * 70;
+    else if (it.type === 'heading') h = 56;
+    else if (it.type === 'table') h = 40 + ((it.rows || []).length || 3) * 34;
+    else if (it.type === 'sketch') h = Math.round(w * (it.sh || 225) / 300);
+    else if (it.type === 'video' || it.type === 'map') h = Math.round(w * 9 / 16) + 40;
+    else if (it.type === 'file' || it.type === 'audio') h = it.type === 'audio' ? 110 : 64;
+    else if (it.type === 'doc') h = 150;
+    else if (it.type === 'ink') return { w: 0, h: 0 };
     else if (it.type === 'link') h = /youtu/.test(it.url || '') ? Math.round(w * 9 / 16) + 56 : 64;
     else h = 48 + Math.max(1, (it.text || '').split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / (w / 15))), 0)) * 22 + (it.video ? 26 : 0);
     return { w, h };
@@ -246,11 +267,11 @@
     opts = opts || {};
     const gap = 20, sizeOf = opts.sizeOf || YVN.estimateSize;
     // lines have no box and cards inside a column are positioned by the column
-    const rects = items.filter((i) => !i.deleted && i.type !== 'line' && !i.col && i.x != null).map((i) => ({ x: i.x, y: i.y, ...sizeOf(i) }));
+    const rects = items.filter((i) => !i.deleted && i.type !== 'line' && i.type !== 'ink' && !i.col && i.x != null).map((i) => ({ x: i.x, y: i.y, ...sizeOf(i) }));
     const free = (x, y) => rects.every((r) => x + w + gap / 2 <= r.x || x >= r.x + r.w + gap / 2 || y + h + gap / 2 <= r.y || y >= r.y + r.h + gap / 2);
     const left = opts.left != null ? opts.left : 40, top = opts.top != null ? opts.top : 40;
     const maxW = opts.maxW || 1200;
-    const a = opts.after && opts.after.type !== 'line' && !opts.after.col ? opts.after : null;
+    const a = opts.after && opts.after.type !== 'line' && opts.after.type !== 'ink' && !opts.after.col ? opts.after : null;
     if (a) {
       const s = sizeOf(a);
       const cands = [[a.x + s.w + gap, a.y], [left, a.y + s.h + gap], [a.x, a.y + s.h + gap]];
