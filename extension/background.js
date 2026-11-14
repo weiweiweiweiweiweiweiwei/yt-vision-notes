@@ -187,6 +187,7 @@ const handlers = {
     if (winId) await chrome.windows.remove(winId).catch(() => {});
     return {};
   },
+  async captureTabMany({ tabId, list }) { const r = await toTab(tabId, { type: 'captureMany', list }); return { caps: r.caps }; },
   async captureTab({ tabId }) { const r = await toTab(tabId, { type: 'captureFrame' }); return { cap: r.cap }; },
   async tabVideo({ tabId }) { const r = await toTab(tabId, { type: 'currentVideo' }).catch(() => ({ video: null })); return { video: r.video }; },
   async seekTab({ tabId, video, ts }) { await toTab(tabId, { type: 'seek', video, ts }); return {}; },

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "YT Vision Notes — YouTube screenshot notes",
   "short_name": "YT Vision Notes",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Whiteboard-style screenshot notes right next to YouTube: boards inside boards, free-form cards, a resizable or pop-out panel, synced to your Google Drive.",
   "icons": {
     "16": "icons/icon16.png",
@@ -17,7 +17,8 @@
   ],
   "host_permissions": [
     "https://www.googleapis.com/*",
-    "https://www.youtube.com/*"
+    "https://www.youtube.com/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "oauth2": {
     "client_id": "1076400748035-5t6h8qv1sm21vp79o8tdii3uinemj383.apps.googleusercontent.com",
@@ -44,6 +45,7 @@
         "shared/richtext.js",
         "shared/board.js",
         "remote-api.js",
+        "ai.js",
         "content.js"
       ],
       "css": [

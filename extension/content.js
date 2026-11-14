@@ -38,6 +38,32 @@
       throw new Error('This video is protected and cannot be captured'); // DRM / tainted canvas
     }
   }
+  /** Capture frames at several timestamps (for AI notes), then put the video back where it was. */
+  async function captureMany(list, onProgress) {
+    const v = videoEl();
+    if (!v || !currentVideoId()) throw new Error('No video frame found');
+    const t0 = v.currentTime, wasPlaying = !v.paused;
+    v.pause();
+    const out = [];
+    try {
+      for (let i = 0; i < list.length; i++) {
+        if (onProgress) onProgress(i, list.length, list[i]);
+        await new Promise((res) => {
+          let done = false;
+          const fin = () => { if (done) return; done = true; v.removeEventListener('seeked', fin); res(); };
+          v.addEventListener('seeked', fin);
+          v.currentTime = Math.min(list[i] + 0.5, Math.max(0, (v.duration || 1e9) - 0.5));
+          setTimeout(fin, 5000);
+        });
+        await new Promise((r) => setTimeout(r, 400)); // let the decoded frame reach the element
+        try { const cap = captureFrame(); cap.ts = list[i]; out.push(cap); } catch (e) { out.push(null); }
+      }
+    } finally {
+      v.currentTime = t0;
+      if (wasPlaying) v.play().catch(() => {});
+    }
+    return out;
+  }
   function seek(video, ts) {
     if (video && video.id && video.id !== currentVideoId()) {
       location.href = `https://www.youtube.com/watch?v=${video.id}&t=${Math.floor(ts)}s`;
@@ -77,6 +103,8 @@
     ui.view = new YVN.BoardView(ui.root, remote.api, {
       mode: 'panel',
       capture: async () => captureFrame(),
+      captureMany,
+      aiGenerate: (req) => YVN.geminiNotes(req),
       currentVideo,
       seek,
       toast,
@@ -237,6 +265,7 @@
   chrome.runtime.onMessage.addListener((m, _sender, reply) => {
     if (m.type === 'captureFrame') { try { reply({ cap: captureFrame() }); } catch (e) { reply({ error: e.message }); } return false; }
     if (m.type === 'currentVideo') { reply({ video: currentVideo() }); return false; }
+    if (m.type === 'captureMany') { captureMany(m.list || []).then((caps) => reply({ caps }), (e) => reply({ error: e.message })); return true; }
     if (m.type === 'seek') { seek(m.video, m.ts); reply({ ok: true }); return false; }
     if (m.type === 'popin') { setPopped(false); reply({ ok: true }); return false; }
     return false;

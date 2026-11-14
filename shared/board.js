@@ -71,6 +71,7 @@
     swatch: '<rect x="4" y="4" width="12" height="16" rx="2"/><path d="M4 14h12"/><path d="m16 7 4 2-4 9"/>',
     undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
     redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>',
+    ai: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18.5 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     unlock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
@@ -143,6 +144,7 @@
       const T = {
         shot: ['camera', 'Capture', 'Capture the current video frame into this board (Alt+S)'],
         summary: ['summary', 'Summary', 'A summary note for the whole video (no screenshot)'],
+        ai: ['ai', 'AI notes', 'Let Gemini watch this video and write notes with screenshots'],
         note: ['note', 'Note', 'Text note (or double-click empty space)'],
         link: ['link', 'Link', 'A web link or YouTube video'],
         todo: ['todo', 'To-do', 'To-do list'],
@@ -162,7 +164,7 @@
         upload: ['upload', 'Upload', 'Upload any file (PDF, audio, video…)'],
         draw: ['draw', 'Draw', 'Draw freehand on the board'],
       };
-      const MAIN = [this.o.capture && 'shot', this.o.capture && 'summary', 'note', 'link', 'todo', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'color'].filter(Boolean);
+      const MAIN = [this.o.capture && 'shot', this.o.capture && 'summary', this.o.aiGenerate && 'ai', 'note', 'link', 'todo', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'color'].filter(Boolean);
       const MORE = ['heading', 'video', 'map', 'audio', 'doc'];
       const LOWER = ['upload_image', 'upload', 'draw'];
       const btn = (act) => {
@@ -172,7 +174,7 @@
       };
       let toolbar;
       if (this.mode === 'panel') {
-        const main = ['shot', 'summary', 'board'].filter((k) => MAIN.includes(k));
+        const main = ['shot', 'summary', 'ai', 'board'].filter((k) => MAIN.includes(k));
         const rest = [...MAIN, ...MORE, ...LOWER].filter((k) => !main.includes(k));
         toolbar = el('div', { class: 'yb-bar' }, main.map(btn),
           el('button', { class: 'yb-tool', title: 'More', onclick: (e) => this._menuAt(e.currentTarget, [
@@ -468,7 +470,7 @@
       const c = el('div', { class: `yb-item yb-${it.type}`, dataset: { id: it.id } });
       if (it.color && it.type !== 'board') c.append(el('div', { class: 'yb-cbar', style: `background:${it.color}` }));
       if (it.type === 'note') {
-        if (it.video) c.append(el('button', { class: 'yb-src', dataset: { act: 'video' }, title: 'Back to video: ' + it.video.title }, icon('play', 12), el('b', {}, 'Summary'), el('span', {}, it.video.title || '')));
+        if (it.video && it.sum !== false) c.append(el('button', { class: 'yb-src', dataset: { act: 'video' }, title: 'Back to video: ' + it.video.title }, icon('play', 12), el('b', {}, 'Summary'), el('span', {}, it.video.title || '')));
         c.append(this._md(it.text, ''));
       } else if (it.type === 'shot' || it.type === 'image') {
         const img = el('img', { alt: it.text ? it.text.slice(0, 60) : 'Capture', draggable: 'false' });
@@ -1536,7 +1538,7 @@
     }
     /** Press a toolbar button and drag it onto the board to create the card where it is dropped. */
     _dragTool(btn, act) {
-      if (['draw', 'upload', 'upload_image', 'audio'].includes(act)) return; // these start a mode or a file picker
+      if (['draw', 'upload', 'upload_image', 'audio', 'ai'].includes(act)) return; // these start a mode, a dialog or a file picker
       btn.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
         const sx = e.clientX, sy = e.clientY;
@@ -1649,6 +1651,7 @@
       if (act === 'column') return this._addColumn();
       if (act === 'color') return this._addColor();
       if (act === 'comment') return this._addComment();
+      if (act === 'ai') return this.openAI();
       if (act === 'heading') return this._addSimple({ type: 'heading', text: '' });
       if (act === 'table') return this._addSimple({ type: 'table', rows: [['', '', ''], ['', '', ''], ['', '', '']] });
       if (act === 'sketch') return this._addSimple({ type: 'sketch', strokes: [], sh: 225 });
@@ -2096,6 +2099,99 @@
       if (skipped) this.toast(skipped === 1 ? 'One card could not be duplicated (boards and unsynced files are skipped)' : `${skipped} cards could not be duplicated (boards and unsynced files are skipped)`);
       await this.reload();
       this.sel = new Set(newIds); this._paintSel();
+    }
+
+    // ---------- AI notes (Gemini) ----------
+    openAI() {
+      if (!this.o.aiGenerate) return;
+      if (this.aiBox && !this.aiBox.hidden && this._aiRunning) return;
+      const saved = (() => { try { return JSON.parse(localStorage.getItem('yb-ai') || '{}'); } catch (e) { return {}; } })();
+      const mode = el('select', { class: 'yb-aiin' },
+        el('option', { value: 'summary' }, 'Summary + key moments'),
+        el('option', { value: 'steps' }, 'Step-by-step tutorial'),
+        el('option', { value: 'custom' }, 'Only my instructions'));
+      mode.value = saved.mode || 'summary';
+      const lang = el('select', { class: 'yb-aiin' },
+        el('option', { value: 'Traditional Chinese (繁體中文)' }, '繁體中文'),
+        el('option', { value: 'English' }, 'English'),
+        el('option', { value: 'video' }, 'Same as the video'));
+      lang.value = saved.language || 'Traditional Chinese (繁體中文)';
+      const shots = el('input', { class: 'yb-aiin', type: 'number', min: '0', max: '20' });
+      shots.value = saved.maxShots != null ? saved.maxShots : 6;
+      const ins = el('textarea', { class: 'yb-aiin yb-aita', rows: '3', placeholder: 'Anything specific? e.g. "focus on the node setup and the exact values"' });
+      const status = el('div', { class: 'yb-aistatus', hidden: true });
+      const go = el('button', { class: 'yb-btn yb-btn-primary' }, 'Generate');
+      const cancel = el('button', { class: 'yb-btn' }, 'Cancel');
+      const form = el('div', { class: 'yb-aiform' },
+        el('label', {}, el('span', {}, 'What to write'), mode),
+        el('label', {}, el('span', {}, 'Language'), lang),
+        el('label', {}, el('span', {}, 'Screenshots (max)'), shots),
+        el('label', { class: 'yb-aiwide' }, el('span', {}, 'Instructions (optional)'), ins));
+      const box = el('div', { class: 'yb-aibox', role: 'dialog' },
+        el('div', { class: 'yb-aihead' }, icon('ai', 18), el('b', {}, 'AI notes'), el('small', {}, 'Gemini watches this video, then the frames are captured here.')),
+        form, status, el('div', { class: 'yb-cpop-act' }, cancel, go));
+      box.addEventListener('keydown', (e) => e.stopPropagation());
+      box.addEventListener('pointerdown', (e) => e.stopPropagation());
+      if (this.aiBox) this.aiBox.remove();
+      this.aiBox = box;
+      this.root.append(box);
+      cancel.onclick = () => { this._aiCancel = true; box.remove(); this.aiBox = null; };
+      go.onclick = async () => {
+        const cfg = { mode: mode.value, language: lang.value, maxShots: Math.max(0, Math.min(20, +shots.value || 0)), instruction: ins.value.trim() };
+        try { localStorage.setItem('yb-ai', JSON.stringify({ mode: cfg.mode, language: cfg.language, maxShots: cfg.maxShots })); } catch (e) { /* ignore */ }
+        form.hidden = true; go.hidden = true; status.hidden = false;
+        this._aiCancel = false; this._aiRunning = true;
+        try {
+          await this.runAI(cfg, (msg) => { status.replaceChildren(el('i', { class: 'yb-spin' }), el('span', {}, msg)); });
+          box.remove(); this.aiBox = null;
+        } catch (e) {
+          if (this._aiCancel) return;
+          status.replaceChildren(el('span', { class: 'yb-danger' }, e.message || String(e)));
+          go.hidden = false; go.textContent = 'Try again'; form.hidden = false;
+        } finally { this._aiRunning = false; }
+      };
+      ins.focus();
+    }
+
+    /** Ask Gemini for notes, capture the frames it picked, and lay everything out on this board. */
+    async runAI(cfg, progress) {
+      const video = this.o.currentVideo && (await this.o.currentVideo());
+      if (!video) throw new Error('Open a YouTube video first');
+      progress('Gemini is watching the video… this can take a minute for long videos.');
+      const res = await this.o.aiGenerate({ videoId: video.id, title: video.title, ...cfg });
+      if (this._aiCancel) return;
+      if (!res.sections.length && !res.summary) throw new Error('Gemini did not find anything to note.');
+      const want = res.sections.filter((x) => x.screenshot).map((x) => x.ts);
+      let frames = {};
+      if (want.length && this.o.captureMany) {
+        progress(`Capturing ${want.length} screenshot${want.length > 1 ? 's' : ''}…`);
+        const caps = await this.o.captureMany(want, (i, n, ts) => progress(`Capturing ${YVN.fmtTime(ts)} (${i + 1}/${n})…`));
+        caps.forEach((c, i) => { if (c && c.dataURL) frames[want[i]] = c; });
+      }
+      if (this._aiCancel) return;
+      progress('Adding the notes to this board…');
+      const before = await this._snap([this.boardId]);
+      const p = this._slot(300, 200);
+      const summary = await this.api.putItem(this.boardId, { type: 'note', video, color: '#f5a524', w: 300, x: p.x, y: p.y, text: res.summary || '' });
+      const col = await this.api.putItem(this.boardId, { type: 'column', title: `AI notes · ${video.title}`.slice(0, 80), w: 300, x: p.x + 320, y: p.y });
+      let ord = 0;
+      for (const sec of res.sections) {
+        const body = `**${sec.title}**${sec.note ? '\n' + sec.note : ''}`;
+        const cap = sec.screenshot ? frames[sec.ts] : null;
+        if (cap) {
+          await this.api.putItem(this.boardId, {
+            type: 'shot', ts: sec.ts, video, text: body, w: 240, col: col.id, ord: ord++,
+            image: { id: YVN.uid('img_'), w: cap.w, h: cap.h, edits: null, fileId: null, editedFileId: null, editedAt: null },
+          }, cap.dataURL);
+        } else {
+          await this.api.putItem(this.boardId, { type: 'note', video, sum: false, text: `[${YVN.fmtTime(sec.ts)}] ${body}`, w: 260, col: col.id, ord: ord++ });
+        }
+      }
+      await this._pushHistory([this.boardId], before); // one Ctrl+Z removes the whole batch
+      await this.reload();
+      this.focusItem(summary.id, false);
+      this.sel = new Set([summary.id, col.id]); this._paintSel();
+      this.toast(`AI notes added: ${res.sections.length} moments, ${Object.keys(frames).length} screenshots`);
     }
 
     // ---------- comment threads ----------

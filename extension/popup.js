@@ -34,3 +34,8 @@ $('open').onclick = async () => {
 };
 chrome.runtime.onMessage.addListener((m) => { if (m.type === 'status') render({ status: m.status }); });
 refresh();
+
+// Gemini (AI notes) settings: stored locally only
+chrome.storage.local.get(['geminiKey', 'geminiModel']).then((r) => { $('gkey').value = r.geminiKey || ''; $('gmodel').value = r.geminiModel || ''; });
+$('gkey').onchange = () => chrome.storage.local.set({ geminiKey: $('gkey').value.trim() });
+$('gmodel').onchange = () => chrome.storage.local.set({ geminiModel: $('gmodel').value.trim() });

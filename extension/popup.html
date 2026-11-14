@@ -35,6 +35,15 @@
   <div class="row">
     <button id="open">Open knowledge base</button>
   </div>
+  <label for="gkey">AI notes — Gemini API key (<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">get one</a>)</label>
+  <div class="row">
+    <input id="gkey" type="password" placeholder="Paste your Gemini API key" autocomplete="off" spellcheck="false">
+  </div>
+  <label for="gmodel">Gemini model</label>
+  <div class="row">
+    <input id="gmodel" type="text" placeholder="gemini-2.5-flash" spellcheck="false">
+  </div>
+  <p class="muted">The key is stored only in this browser and is never synced.</p>
   <p class="muted">Click the notes icon at the bottom right of the YouTube player to open the board. Alt+S captures a frame; the panel can pop out into its own window.</p>
   <script src="popup.js"></script>
 </body>

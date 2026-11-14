@@ -23,6 +23,8 @@
   const view = new YVN.BoardView(root, remote.api, {
     mode: 'window',
     capture: async () => (await remote.send('captureTab', { tabId })).cap,
+    captureMany: async (list) => (await remote.send('captureTabMany', { tabId, list })).caps,
+    aiGenerate: (req) => YVN.geminiNotes(req),
     currentVideo: async () => (await remote.send('tabVideo', { tabId })).video,
     seek: (video, ts) => remote.send('seekTab', { tabId, video, ts }).catch((e) => view.toast(e.message)),
     headerExtras: [
