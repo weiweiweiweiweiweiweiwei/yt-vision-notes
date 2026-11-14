@@ -165,6 +165,20 @@
       else if (it.type === 'board') lines.push(`- 📁 [[${(sums[it.boardId] || {}).title || '未命名'}]]`, '');
       else if (it.type === 'column') lines.push(`## ${it.title || '欄'}`, '');
       else if (it.type === 'color') lines.push(`- 色票 ${it.name || ''} \`${(it.hex || '').toUpperCase()}\``, '');
+      else if (it.type === 'heading') lines.push(`## ${it.text || ''}`, '');
+      else if (it.type === 'table' && (it.rows || []).length) {
+        const cell = (v) => String(v || '').replace(/\|/g, '\|').replace(/\n/g, ' ');
+        const [head, ...body] = it.rows;
+        lines.push(`| ${head.map(cell).join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...body.map((r) => `| ${r.map(cell).join(' | ')} |`), '');
+      } else if (it.type === 'doc') lines.push(`### ${it.title || '未命名文件'}`, '', it.text || '', '');
+      else if (it.type === 'video' && it.url) lines.push(`- 影片：[${it.title || it.url}](${it.url})`, '');
+      else if (it.type === 'map' && it.query) lines.push(`- 地圖：[${it.query}](https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.query)})`, '');
+      else if (it.file) {
+        const blob = await store.getImageBlob(it.file, 'orig', driveOrNull());
+        const name = `files/${it.file.id}-${String(it.file.name || 'file').replace(/[\/:*?"<>|]/g, '_')}`;
+        if (blob) files.push({ name, data: blob }); else missing++;
+        lines.push(`- 檔案：[${it.file.name || '檔案'}](${encodeURI(name)})`, '');
+      } else if (it.type === 'sketch') lines.push('- （草圖）', '');
     }
     files.unshift({ name: 'board.md', data: lines.join('\n') });
     const zip = await YVN.makeZip(files);

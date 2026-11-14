@@ -221,7 +221,7 @@
       if (!q) return;
       const res = await this.api.search(q);
       if (!res.length) { this.sList.append(el('li', { class: 'yb-snone' }, '找不到符合的筆記')); return; }
-      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票', comment: '留言' };
+      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票', comment: '留言', heading: '標題', table: '表格', sketch: '草圖', video: '影片', map: '地圖', audio: '音訊', file: '檔案', doc: '文件', ink: '繪圖' };
       for (const r of res) {
         const text = (r.text || '').replace(/\s+/g, ' ');
         this.sList.append(el('li', { tabindex: '0', onclick: () => { this.toggleSearch(false); this.open(r.type === 'board' && !r.itemId ? r.boardId : r.boardId, r.itemId); } },
@@ -1366,7 +1366,7 @@
     async openTrash() {
       this._closeMenu();
       const list = await this.api.trash();
-      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票', comment: '留言' };
+      const label = { note: '筆記', shot: '截圖', image: '圖片', board: 'Board', link: '連結', column: '欄', line: '連線', color: '色票', comment: '留言', heading: '標題', table: '表格', sketch: '草圖', video: '影片', map: '地圖', audio: '音訊', file: '檔案', doc: '文件', ink: '繪圖' };
       const rows = list.map((t) => {
         const it = t.item;
         const text = String(it.type === 'board' ? t.boardRefTitle || '' : YVN.itemText(it)).replace(/\s+/g, ' ');
