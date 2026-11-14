@@ -168,7 +168,7 @@
       const MORE = ['heading', 'video', 'map', 'audio', 'doc'];
       const LOWER = ['upload_image', 'upload', 'draw'];
       const btn = (act) => {
-        const b = el('button', { class: 'yb-tool' + (act === 'shot' ? ' yb-primary' : ''), title: T[act][2] + ' — click, or drag onto the board', dataset: { tool: act }, onclick: () => { if (this._toolDragged) { this._toolDragged = false; return; } this.tool(act); } }, icon(T[act][0], 20), el('span', {}, T[act][1]));
+        const b = el('button', { class: 'yb-tool' + (act === 'shot' ? ' yb-primary' : ''), dataset: { tool: act }, onclick: () => { if (this._toolDragged) { this._toolDragged = false; return; } this.tool(act); } }, icon(T[act][0], 20), el('span', {}, T[act][1]));
         this._dragTool(b, act);
         return b;
       };
@@ -178,14 +178,14 @@
         // Fixed size (not scaled with the canvas): Line / Board, the round Capture button, Column / Comment / More.
         const SIDE = new Set(['line', 'board', 'column', 'comment', 'shot']);
         const rest = ['summary', 'ai', ...MAIN, ...MORE, ...LOWER].filter((k, i, a) => T[k] && !SIDE.has(k) && a.indexOf(k) === i && (k !== 'summary' || this.o.capture) && (k !== 'ai' || this.o.aiGenerate));
-        const more = el('button', { class: 'yb-tool', title: 'More tools', 'aria-label': 'More tools', onclick: (e) => this._menuAt(e.currentTarget, [
+        const more = el('button', { class: 'yb-tool', 'aria-label': 'More tools', onclick: (e) => this._menuAt(e.currentTarget, [
           ...rest.map((k) => ({ label: T[k][1], icon: T[k][0], run: () => this.tool(k) })),
           { sep: true },
           { label: 'Undo (Ctrl+Z)', icon: 'undo', run: () => this.undo() },
           { label: 'Redo (Ctrl+Y)', icon: 'redo', run: () => this.redo() },
           { label: 'Trash', icon: 'trash', run: () => this.openTrash() },
         ], false, true) }, icon('more', 20), el('span', {}, 'More'));
-        const grab = this.o.capture && el('button', { class: 'yb-grab', title: T.shot[2], 'aria-label': 'Capture the current frame', onclick: () => this.tool('shot') }, icon('plus', 28));
+        const grab = this.o.capture && el('button', { class: 'yb-grab', 'aria-label': 'Capture the current frame', onclick: () => this.tool('shot') }, icon('plus', 28));
         this.side = el('div', { class: 'yb-side' },
           el('div', { class: 'yb-sgroup' }, btn('line'), btn('board')),
           grab,
@@ -204,15 +204,15 @@
         r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, this.vp, hot, this.side));
       } else {
         this.flyout = el('div', { class: 'yb-flyout', hidden: true },
-          ...MORE.map((k) => { const b = el('button', { class: 'yb-tool', title: T[k][2], onclick: () => { if (this._toolDragged) { this._toolDragged = false; return; } this.flyout.hidden = true; this.tool(k); } }, icon(T[k][0], 24), el('span', {}, T[k][1])); this._dragTool(b, k); return b; }));
-        const moreBtn = el('button', { class: 'yb-tool yb-moretool', title: 'More tools', 'aria-label': 'More tools', onclick: (e) => {
+          ...MORE.map((k) => { const b = el('button', { class: 'yb-tool', onclick: () => { if (this._toolDragged) { this._toolDragged = false; return; } this.flyout.hidden = true; this.tool(k); } }, icon(T[k][0], 24), el('span', {}, T[k][1])); this._dragTool(b, k); return b; }));
+        const moreBtn = el('button', { class: 'yb-tool yb-moretool', 'aria-label': 'More tools', onclick: (e) => {
           const fr = e.currentTarget.getBoundingClientRect(), rr = r.getBoundingClientRect();
           this.flyout.hidden = !this.flyout.hidden;
           this.flyout.style.left = fr.right - rr.left + 8 + 'px';
           this.flyout.style.top = Math.max(8, Math.min(fr.top - rr.top - 60, rr.height - 260)) + 'px';
         } }, el('span', { class: 'yb-dots' }, icon('more', 20)));
         toolbar = el('div', { class: 'yb-tools' }, MAIN.map(btn), moreBtn, el('hr', { class: 'yb-tsep' }), LOWER.map(btn),
-          el('button', { class: 'yb-tool yb-trashbtn', title: 'Trash: deleted cards are kept for 30 days and can be restored', onclick: () => this.openTrash() }, icon('trash', 20), el('span', {}, 'Trash')));
+          el('button', { class: 'yb-tool yb-trashbtn', onclick: () => this.openTrash() }, icon('trash', 20), el('span', {}, 'Trash')));
         r.append(this.head, this.recentRow, el('div', { class: 'yb-body' }, toolbar, this.vp), this.flyout);
       }
       this.drawBar = this._buildDrawBar();
@@ -1276,7 +1276,7 @@
       }
       const comments = new Map((it.comments || []).map((cm) => [cm.id, { ...cm }]));
       const ed = new YVN.RichEditor(it.text || '', {
-        placeholder: it.type === 'note' ? (it.video ? 'Key points and takeaways from the whole video…' : 'Start typing… (select text to format it)') : 'Caption…',
+        placeholder: it.type === 'note' ? (it.video ? 'Key points and takeaways from the whole video…' : 'Start typing…') : 'Caption…',
         onDone: () => this.commitEdit(),
         onComment: (cid, span, isNew) => this._commentPop({ itemId: id, cid, anchor: span, editing: true, isNew }),
       });
@@ -1333,7 +1333,7 @@
             list.push({ id: YVN.uid('c_'), text: val, createdAt: now, updatedAt: now, author: await this._me() });
           }
         }
-        if (!list.length) await this.m.deleteItems(this.boardId, [id]); // an empty thread disappears
+        if (!list.length && ((it.comments || []).length || this._fresh === id)) await this.m.deleteItems(this.boardId, [id]); // an emptied (or abandoned new) thread disappears
         else if (JSON.stringify(list) !== JSON.stringify(it.comments || [])) await this.m.putItem(this.boardId, { id, comments: list });
         this._fresh = null;
         if (c) c._sig = null;
@@ -1584,7 +1584,8 @@
           // drop exactly where the preview was
           const pt = this._toBoard(ev.clientX - GRAB.x, ev.clientY - GRAB.y);
           this._dropAt = { x: Math.round(pt.x), y: Math.round(pt.y) };
-          this.tool(act).finally(() => { this._dropAt = null; });
+          this._dropping = true; // a card dragged in from the toolbar stays, even if left empty
+          this.tool(act).finally(() => { this._dropAt = null; this._dropping = false; });
         };
         window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
       });
@@ -1699,7 +1700,7 @@
       const it = await this.m.putItem(this.boardId, { type: 'note', text: o.text || '', video: o.video, color: o.color, w, ...p });
       await this.reload();
       this.focusItem(it.id, false);
-      if (o.edit !== false) { this._fresh = it.id; this.startEdit(it.id); }
+      if (o.edit !== false) { this._fresh = this._dropping ? null : it.id; this.startEdit(it.id); }
       return it;
     }
     async _addBoard() {
@@ -1714,7 +1715,7 @@
       const it = await this.m.putItem(this.boardId, { type: 'link', url, title: url ? await this._linkTitle(url) : '', w: YVN.CARD_W.link, ...p });
       await this.reload();
       this.focusItem(it.id, false);
-      if (!url) { this._fresh = it.id; this.startEdit(it.id); }
+      if (!url) { this._fresh = this._dropping ? null : it.id; this.startEdit(it.id); }
     }
 
     /** Add a captured frame { dataURL, w, h, ts, video } as a screenshot card next to the previous one. */
@@ -1854,7 +1855,7 @@
       const it = await this.m.putItem(this.boardId, { ...o, w, ...p });
       await this.reload();
       this.focusItem(it.id, false);
-      this._fresh = it.id;
+      this._fresh = this._dropping ? null : it.id;
       this.startEdit(it.id);
     }
     _patchEdit(it, c, inp, get, empty) {
@@ -2017,7 +2018,7 @@
     _docEdit(it, c) {
       const title = el('input', { class: 'yb-doctitle-in', placeholder: 'Document title' });
       title.value = it.title || '';
-      const ed = new YVN.RichEditor(it.text || '', { placeholder: 'Start writing… (select text to format it)', onDone: () => this.commitEdit() });
+      const ed = new YVN.RichEditor(it.text || '', { placeholder: 'Start writing…', onDone: () => this.commitEdit() });
       ed.el.classList.add('yb-docbody');
       const close = el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, 'Done');
       const modal = el('div', { class: 'yb-docmodal' }, el('div', { class: 'yb-docpage' }, el('div', { class: 'yb-docbar' }, el('span', { class: 'yb-ph' }, 'Document'), el('span', { class: 'yb-grow' }), close), title, ed.el));
@@ -2217,7 +2218,7 @@
       const it = await this.m.putItem(this.boardId, { type: 'comment', comments: [], w: YVN.CARD_W.comment, ...p });
       await this.reload();
       this.focusItem(it.id, false);
-      this._fresh = it.id;
+      this._fresh = this._dropping ? null : it.id;
       this.startEdit(it.id, { mode: 'reply' });
     }
     /** Who is writing: Google account name/photo when signed in, otherwise "我". */
@@ -2254,7 +2255,7 @@
       const it = await this.m.putItem(this.boardId, { type: 'color', hex: nextHex || palette[Math.floor(Math.random() * palette.length)], name: '', w: YVN.CARD_W.color, ...p });
       await this.reload();
       this.focusItem(it.id, false);
-      this._fresh = it.id;
+      this._fresh = this._dropping ? null : it.id;
       this.startEdit(it.id);
     }
 
