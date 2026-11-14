@@ -369,3 +369,11 @@ button.yb-playbadge:hover { background: #e5484d; transform: translate(-50%, -50%
 .yb-mapwrap { position: relative; }
 .yb-shield { position: absolute; inset: 0; cursor: grab; }
 .yb-note .yb-md.yb-ph:empty { min-height: 44px; }
+
+/* free height: notes, comments, tables, columns… can be stretched taller than their content */
+.yb-rs.yb-rs2 { cursor: nwse-resize; }
+.yb-item.yb-note, .yb-item.yb-doc, .yb-item.yb-comment { display: flex; flex-direction: column; }
+.yb-note > .yb-md, .yb-note > .yb-rt { flex: 1; }
+.yb-column { display: flex; flex-direction: column; }
+.yb-column > .yb-colbody { flex: 1; }
+.yb-colcollapsed { min-height: 0 !important; }

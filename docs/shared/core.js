@@ -257,7 +257,7 @@
     else if (it.type === 'ink') return { w: 0, h: 0 };
     else if (it.type === 'link') h = /youtu/.test(it.url || '') ? Math.round(w * 9 / 16) + 56 : 64;
     else h = 48 + Math.max(1, (it.text || '').split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / (w / 15))), 0)) * 22 + (it.video ? 26 : 0);
-    return { w, h };
+    return { w, h: Math.max(h, it.h || 0) };
   };
 
   /**

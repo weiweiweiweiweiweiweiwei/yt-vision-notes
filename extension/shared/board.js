@@ -80,6 +80,7 @@
   const host = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return url; } };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const snap = (v) => Math.round(v / 10) * 10;
+  const FREE_H = new Set(['note', 'comment', 'table', 'doc', 'column', 'link', 'file', 'audio', 'heading', 'color']);
 
   class BoardView {
     constructor(root, api, opts) {
@@ -423,6 +424,7 @@
         if (e.parentElement !== this.layer) this.layer.append(e);
         e.style.left = it.x + 'px'; e.style.top = it.y + 'px';
         e.style.width = (it.w || YVN.CARD_W[it.type] || 240) + 'px';
+        e.style.minHeight = FREE_H.has(it.type) && it.h ? it.h + 'px' : '';
       }
       // cards stacked inside columns, in column order
       for (const cid of this._colIds) {
@@ -435,6 +437,7 @@
           if (!e || e.classList.contains('yb-dragging')) continue;
           e.classList.add('yb-incol');
           e.style.left = ''; e.style.top = ''; e.style.width = '';
+          e.style.minHeight = FREE_H.has(k.type) && k.h ? k.h + 'px' : '';
           body.appendChild(e);
         }
         body.classList.toggle('yb-colempty', !list.length);
@@ -548,7 +551,7 @@
       const nc = it.type === 'comment' ? 0 : (it.comments || []).length;
       if (nc) c.append(el('button', { class: 'yb-cbadge', title: `${nc} ${nc === 1 ? 'comment' : 'comments'}`, dataset: { act: 'comments' } }, icon('comment', 13), String(nc)));
       if (it.locked) { c.classList.add('yb-locked'); c.append(el('span', { class: 'yb-lockbadge', title: 'Position locked' }, icon('lock', 12))); }
-      if (it.type !== 'board') c.append(el('div', { class: 'yb-rs', title: 'Drag to resize' }));
+      if (it.type !== 'board') c.append(el('div', { class: 'yb-rs' + (FREE_H.has(it.type) ? ' yb-rs2' : ''), title: 'Drag to resize' }));
       return c;
     }
     _md(text, ph) {
@@ -679,7 +682,10 @@
         const id = card.dataset.id;
         const cit = this.board.items.find((i) => i.id === id);
         if (t.classList.contains('yb-rs') && !(cit && cit.locked)) {
-          this.gesture = { kind: 'resize', id, start, w: card.offsetWidth / 1, el: card };
+          // natural content height = the smallest the card can be dragged to
+          const prevMin = card.style.minHeight; card.style.minHeight = '';
+          const natural = card.offsetHeight; card.style.minHeight = prevMin;
+          this.gesture = { kind: 'resize', id, start, w: card.offsetWidth, h: card.offsetHeight, natural, free: FREE_H.has(cit && cit.type), inCol: card.classList.contains('yb-incol'), el: card };
         } else {
           if (e.shiftKey || e.ctrlKey || e.metaKey) { this.sel.has(id) ? this.sel.delete(id) : this.sel.add(id); }
           else if (!this.sel.has(id)) this.sel = new Set([id]);
@@ -766,7 +772,8 @@
         this._edgePan(e);
         this._renderLines();
       } else if (gst.kind === 'resize') {
-        gst.el.style.width = clamp(gst.w + dx / this.view.z, 120, 900) + 'px';
+        if (!gst.inCol) gst.el.style.width = clamp(gst.w + dx / this.view.z, 120, 1200) + 'px';
+        if (gst.free) gst.el.style.minHeight = Math.max(gst.natural, Math.round(gst.h + dy / this.view.z)) + 'px';
         this._renderLines();
       } else if (gst.kind === 'marquee') {
         const r = this.vp.getBoundingClientRect();
@@ -827,8 +834,10 @@
         return this.reload();
       }
       if (gst.kind === 'resize') {
-        const w = Math.round(parseFloat(gst.el.style.width));
-        await this.m.patchItems(this.boardId, [{ id: gst.id, w }]);
+        const patch = { id: gst.id };
+        if (!gst.inCol) patch.w = Math.round(parseFloat(gst.el.style.width));
+        if (gst.free) { const h = Math.round(parseFloat(gst.el.style.minHeight) || 0); patch.h = h > gst.natural + 2 ? h : null; }
+        await this.m.patchItems(this.boardId, [patch]);
         return this.reload();
       }
       if (gst.kind === 'drag') {
