@@ -447,8 +447,8 @@
       const msg = this.boardId === HOME
         ? 'This is Home. Click "Board" to create your first board, e.g. "DaVinci Color Grading".'
         : this.o.capture ? 'Click "Capture" to add the current video frame to this board, or "Summary" to write about the whole video.' : 'Double-click empty space to add a note, or add cards and boards from the toolbar.';
-      this.empty.textContent = msg;
-      this.empty.hidden = live.length > 0;
+      void msg;
+      this.empty.hidden = true;
     }
     _paintSel() {
       for (const [id, e] of this.els) e.classList.toggle('yb-sel', this.sel.has(id));
@@ -460,7 +460,7 @@
       if (it.color && it.type !== 'board') c.append(el('div', { class: 'yb-cbar', style: `background:${it.color}` }));
       if (it.type === 'note') {
         if (it.video) c.append(el('button', { class: 'yb-src', dataset: { act: 'video' }, title: 'Back to video: ' + it.video.title }, icon('play', 12), el('b', {}, 'Summary'), el('span', {}, it.video.title || '')));
-        c.append(this._md(it.text, 'Double-click to type…'));
+        c.append(this._md(it.text, ''));
       } else if (it.type === 'shot' || it.type === 'image') {
         const img = el('img', { alt: it.text ? it.text.slice(0, 60) : 'Capture', draggable: 'false' });
         const wrap = el('div', { class: 'yb-imgwrap', style: it.image && it.image.w ? `aspect-ratio:${it.image.w}/${it.image.h}` : '' }, img);
@@ -471,7 +471,6 @@
         if (it.type === 'shot') {
           const foot = el('div', { class: 'yb-foot' });
           if (it.ts != null) foot.append(el('button', { class: 'yb-ts', dataset: { act: 'seek' }, title: it.video ? `Jump to this moment in ${it.video.title}` : 'Jump to this moment' }, YVN.fmtTime(it.ts)));
-          if (!it.text) foot.append(el('span', { class: 'yb-ph yb-capph' }, 'Double-click to add a caption'));
           c.append(foot);
         }
         if (it.text) c.append(el('div', { class: 'yb-cap' }, this._md(it.text)));
@@ -493,32 +492,43 @@
         c.append(this._tableEl(it.rows, false));
       } else if (it.type === 'sketch') {
         c.append(this._sketchSvg(it));
-        if (!(it.strokes || []).length) c.append(el('div', { class: 'yb-skph yb-ph' }, 'Double-click to start drawing'));
+      } else if ((it.type === 'video' && !it.url && !it.file) || (it.type === 'map' && !it.query)) {
+        // Milanote-style empty state: just an icon and the link / place field
+        c.classList.add('yb-mempty');
+        const inp = el('input', { class: 'yb-min', placeholder: it.type === 'map' ? 'Search for a place' : 'Paste a link from YouTube or Vimeo', spellcheck: 'false' });
+        inp.addEventListener('focus', () => { if (this.editing !== it.id) this.startEdit(it.id); });
+        c.append(el('div', { class: 'yb-mrow' }, el('span', { class: 'yb-mic' }, icon(it.type === 'map' ? 'map' : 'play', 14)), inp));
       } else if (it.type === 'video') {
         const vid = ytId(it.url), vimeo = /vimeo\.com\/(?:video\/)?(\d+)/.exec(it.url || '');
-        const wrap = el('div', { class: 'yb-imgwrap yb-vwrap', dataset: { act: 'play' } });
+        const wrap = el('div', { class: 'yb-imgwrap yb-vwrap' });
         if (it.file) wrap.append(el('div', { class: 'yb-vfile' }, icon('video', 34), el('span', {}, it.file.name)));
-        else if (vid) wrap.append(el('img', { src: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`, alt: '', draggable: 'false' }));
-        else wrap.append(el('div', { class: 'yb-vfile' }, icon('video', 34), el('span', {}, vimeo ? 'Vimeo' : it.url ? host(it.url) : 'Double-click to paste a video link')));
-        if (it.url || it.file) wrap.append(el('span', { class: 'yb-playbadge' }, icon('play', 18)));
-        c.append(wrap, el('div', { class: 'yb-linkbody' }, el('div', { class: 'yb-linktxt' }, el('b', {}, it.title || (it.file ? it.file.name : it.url ? host(it.url) : 'Video')), el('small', {}, it.file ? YVN.fmtSize(it.file.size) : host(it.url || '')))));
+        else if (vid) {
+          // maxres / mq thumbnails are 16:9 (hq has letterbox bars); cover fills the frame
+          const img = el('img', { src: `https://i.ytimg.com/vi/${vid}/maxresdefault.jpg`, alt: '', draggable: 'false' });
+          img.addEventListener('load', () => { if (img.naturalWidth <= 120) img.src = `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`; });
+          img.addEventListener('error', () => { img.src = `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`; }, { once: true });
+          wrap.append(img);
+        } else wrap.append(el('div', { class: 'yb-vfile' }, icon('video', 34), el('span', {}, vimeo ? 'Vimeo' : host(it.url))));
+        wrap.append(el('button', { class: 'yb-playbadge', dataset: { act: 'play' }, title: 'Play', 'aria-label': 'Play' }, icon('play', 18)));
+        c.append(wrap, el('div', { class: 'yb-linkbody' }, el('div', { class: 'yb-linktxt' }, el('b', {}, it.title || (it.file ? it.file.name : host(it.url))), el('small', {}, it.file ? YVN.fmtSize(it.file.size) : host(it.url || '')))));
       } else if (it.type === 'map') {
-        c.append(el('div', { class: 'yb-imgwrap yb-mapwrap', dataset: { act: 'play' } },
-          el('div', { class: 'yb-vfile' }, icon('map', 34), el('span', {}, it.query ? 'Click to load the map' : 'Double-click to enter a place'))),
-        el('div', { class: 'yb-linkbody' }, el('span', { class: 'yb-linkic' }, icon('map', 18)),
-          el('div', { class: 'yb-linktxt' }, el('b', {}, it.query || 'No place set'), it.query && el('a', { href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.query)}`, target: '_blank', rel: 'noopener noreferrer', dataset: { act: 'open' } }, 'Open in Google Maps'))));
+        const wrap = el('div', { class: 'yb-imgwrap yb-mapwrap' },
+          el('iframe', { src: `https://maps.google.com/maps?q=${encodeURIComponent(it.query)}&z=14&output=embed`, loading: 'lazy', referrerpolicy: 'no-referrer-when-downgrade', title: it.query, tabindex: '-1' }),
+          el('div', { class: 'yb-shield', title: 'Double-click to use the map' }));
+        c.append(wrap, el('div', { class: 'yb-linkbody' }, el('span', { class: 'yb-linkic' }, icon('map', 18)),
+          el('div', { class: 'yb-linktxt' }, el('b', {}, it.query), el('a', { href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.query)}`, target: '_blank', rel: 'noopener noreferrer', dataset: { act: 'open' } }, 'Open in Google Maps'))));
       } else if (it.type === 'audio') {
         const au = el('audio', { controls: true, preload: 'none' });
         this._loadMedia(it, au);
         c.append(el('div', { class: 'yb-audio' }, el('div', { class: 'yb-ahead' }, el('span', { class: 'yb-aic' }, icon('audio', 20)), el('div', { class: 'yb-linktxt' }, el('b', {}, it.file ? it.file.name : 'Audio'), el('small', {}, it.file ? YVN.fmtSize(it.file.size) : ''))), au));
       } else if (it.type === 'file') {
         c.append(el('div', { class: 'yb-linkbody' }, el('span', { class: 'yb-linkic yb-fileic' }, icon('file', 20)),
-          el('div', { class: 'yb-linktxt' }, el('b', {}, it.file ? it.file.name : 'File'), el('small', {}, it.file ? `${YVN.fmtSize(it.file.size)} · double-click to open` : ''))));
+          el('div', { class: 'yb-linktxt' }, el('b', {}, it.file ? it.file.name : 'File'), el('small', {}, it.file ? YVN.fmtSize(it.file.size) : ''))));
       } else if (it.type === 'doc') {
         const plain = YVN.plainText(it.text || '').replace(/\s+/g, ' ').trim();
         c.append(el('div', { class: 'yb-docic' }, icon('doc', 26)),
           el('div', { class: 'yb-doctitle' + (it.title ? '' : ' yb-ph') }, it.title || 'Untitled document'),
-          el('div', { class: 'yb-docprev' }, plain ? plain.slice(0, 120) + (plain.length > 120 ? '…' : '') : 'Double-click to open'));
+          plain && el('div', { class: 'yb-docprev' }, plain.slice(0, 120) + (plain.length > 120 ? '…' : '')));
       } else if (it.type === 'comment') {
         const thread = el('div', { class: 'yb-thread' });
         for (const cm of it.comments || []) thread.append(this._commentLine(cm));
@@ -570,7 +580,7 @@
           const id = ink.dataset.id;
           return this._menuAt({ x: e.clientX, y: e.clientY }, [
             { colors: ['#f1f1f3', '#1d1d1f', ...YVN.BOARD_COLORS], pick: async (c) => { await this.m.patchItems(this.boardId, [{ id, color: c || '#8b8d98' }]); this.reload(); } },
-            { sep: true }, { label: 'Delete drawing', danger: true, run: async () => { await this.m.deleteItems(this.boardId, [id]); this.reload(); } }]);
+          ]);
         }
         const ln = e.target.closest('.yb-line, .yb-llabel');
         if (ln) { e.preventDefault(); this.sel = new Set([ln.dataset.id]); this._paintSel(); return this._lineMenu(ln.dataset.id, { x: e.clientX, y: e.clientY }); }
@@ -967,6 +977,7 @@
     _dbl(e) {
       const t = e.target;
       if (t.closest('textarea, input, [data-act], .yb-rt')) return;
+      if (t.closest('.yb-shield')) { t.closest('.yb-shield').remove(); return; }
       const lineEl = t.closest('.yb-line, .yb-llabel');
       if (lineEl) return this._editLineLabel(lineEl.dataset.id);
       if (t.closest('.yb-colhead')) return this._renameColumn(t.closest('.yb-item')._item);
@@ -986,7 +997,7 @@
       if (it.type === 'link') return t.closest('.yb-yt') ? window.open(it.url, '_blank', 'noopener') : this.startEdit(it.id);
       if (it.type === 'color') return this.startEdit(it.id);
       if (it.type === 'comment') return this.startEdit(it.id, { mode: 'reply' });
-      if (['heading', 'table', 'sketch', 'video', 'map', 'doc'].includes(it.type)) return this.startEdit(it.id);
+      if (['heading', 'table', 'sketch', 'video', 'doc'].includes(it.type) || (it.type === 'map' && !it.query)) return this.startEdit(it.id);
       if (it.type === 'file') return this._openFile(it);
     }
 
@@ -1061,8 +1072,8 @@
         return this._menuAt(anchor, [lockEntry, { label: 'Draw line from this card', icon: 'line', run: () => this._startLineFrom(it.id) }, colorEntry]);
       }
       if (!multi) {
-        if (it.type === 'board') entries.push({ label: 'Open', icon: 'board', run: () => this.open(it.boardId) }, { label: 'Rename', icon: 'note', run: () => this._renameCard(it) });
-        if (it.type === 'note' || it.type === 'shot' || it.type === 'image') entries.push({ label: it.type === 'note' ? 'Edit text' : 'Edit caption', icon: 'note', run: () => this.startEdit(it.id) });
+        if (it.type === 'board') entries.push({ label: 'Open', icon: 'board', run: () => this.open(it.boardId) });
+        if (it.type === 'map' && it.query) entries.push({ label: 'Change place', icon: 'map', run: () => this.startEdit(it.id) });
         if (it.type === 'shot' || it.type === 'image') entries.push({ label: 'Open annotation editor', icon: 'image', run: () => this.openEditor(it.id) });
         if (it.type === 'shot' && it.ts != null) entries.push({ label: 'Jump to video at ' + YVN.fmtTime(it.ts), icon: 'play', run: () => this._seek(it.video, it.ts) });
         if (it.type === 'link') entries.push({ label: 'Open link', icon: 'link', run: () => window.open(it.url, '_blank', 'noopener') }, { label: 'Edit link', icon: 'note', run: () => this.startEdit(it.id) });
@@ -1076,12 +1087,7 @@
       }
       const boardsHere = YVN.liveItems(this.board).filter((x) => x.type === 'board' && !ids.includes(x.id));
       if (boardsHere.length) entries.push({ label: 'Move to board…', icon: 'board', run: () => this._menuAt(anchor, boardsHere.map((b) => ({ label: this._title(b.boardId), icon: 'board', run: () => this._moveInto(ids, b.boardId) }))) });
-      if (this.boardId !== HOME) {
-        const parent = (this.sums[this.boardId] || this.board).parentId || HOME;
-        entries.push({ label: `Move up to "${this._title(parent)}"`, icon: 'home', run: () => this._moveInto(ids, parent) });
-      }
       entries.push({ sep: true }, lockEntry, colorEntry);
-      entries.push({ sep: true }, { label: multi ? `Delete ${ids.length} cards` : 'Delete', danger: true, run: () => this.deleteSelected() });
       this._menuAt(anchor, entries);
     }
 
@@ -1111,9 +1117,11 @@
       }
       if (it.type === 'video' || it.type === 'map') {
         const isMap = it.type === 'map';
+        const inline = c.querySelector('.yb-min');
+        if (inline) return this._patchEdit(it, c, inline, () => (isMap ? { query: inline.value.trim() } : { url: inline.value.trim() }), (v) => (isMap ? !v.query : !v.url));
         const inp = el('input', { class: 'yb-input', placeholder: isMap ? 'A place or address, e.g. Taipei 101' : 'Paste a YouTube or Vimeo link' });
         inp.value = isMap ? it.query || '' : it.url || '';
-        const box = el('div', { class: 'yb-editbox' }, inp, !isMap && !it.file && el('button', { class: 'yb-btn', style: 'margin-top:6px', onclick: () => { this._edit.cancel = true; this.commitEdit(); this._pickFiles('video/*', 'video', it.id); } }, 'Or upload a video file…'));
+        const box = el('div', { class: 'yb-editbox' }, inp);
         c.querySelector('.yb-linkbody').replaceWith(box);
         return this._patchEdit(it, c, inp, () => (isMap ? { query: inp.value.trim() } : { url: inp.value.trim() }), (v) => (isMap ? !v.query : !v.url && !it.file));
       }
@@ -1822,11 +1830,7 @@
     async _play(it, card) {
       const wrap = card.querySelector('.yb-vwrap, .yb-mapwrap');
       if (!wrap) return;
-      if (it.type === 'map') {
-        if (!it.query) return this.startEdit(it.id);
-        wrap.replaceChildren(el('iframe', { src: `https://maps.google.com/maps?q=${encodeURIComponent(it.query)}&z=14&output=embed`, loading: 'lazy', referrerpolicy: 'no-referrer-when-downgrade', title: it.query }));
-        return;
-      }
+      if (it.type === 'map') return;
       if (it.file) {
         const v = el('video', { controls: true, autoplay: true });
         wrap.replaceChildren(v);
@@ -2056,8 +2060,6 @@
         { label: 'No arrow —', icon: 'line', run: () => set({ arrow: 'none' }) },
         { label: 'Reverse direction', icon: 'redo', run: () => set({ from: ln.to, to: ln.from }) },
         { colors: [null, ...YVN.BOARD_COLORS], pick: (c) => set({ color: c }) },
-        { sep: true },
-        { label: 'Delete line', danger: true, run: async () => { await this.m.deleteItems(this.boardId, [id]); this.sel.delete(id); this.reload(); } },
       ]);
     }
     _editLineLabel(id) {
