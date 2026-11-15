@@ -175,34 +175,21 @@
       };
       let toolbar;
       if (this.mode === 'panel') {
-        // YouTube panel: a floating side bar that slides in when the pointer reaches the left edge.
-        // Fixed size (not scaled with the canvas): Line / Board, the round Capture button, Column / Comment / More.
-        const SIDE = new Set(['line', 'board', 'column', 'comment', 'shot']);
-        const rest = ['summary', 'ai', ...MAIN, ...MORE, ...LOWER].filter((k, i, a) => T[k] && !SIDE.has(k) && a.indexOf(k) === i && (k !== 'summary' || this.o.capture) && (k !== 'ai' || this.o.aiGenerate));
-        const more = el('button', { class: 'yb-tool', 'aria-label': 'More tools', onclick: (e) => this._menuAt(e.currentTarget, [
+        // YouTube panel: no tool bar. Right-click empty board space opens the tool wheel at the pointer
+        // (right-click again flips between its two panels); everything else is in the header's ⋯ menu.
+        const WHEEL = new Set(['shot', 'link', 'heading', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'todo', 'draw', 'color', this.o.aiGenerate ? 'ai' : 'upload_image']);
+        const rest = ['summary', 'ai', ...MAIN, ...MORE, ...LOWER].filter((k, i, all) => T[k] && !WHEEL.has(k) && all.indexOf(k) === i && (k !== 'summary' || this.o.capture) && (k !== 'ai' || this.o.aiGenerate));
+        const more = el('button', { class: 'yb-hbtn', title: 'More tools', 'aria-label': 'More tools', onclick: (e) => this._menuAt(e.currentTarget, [
+          { heading: 'Right-click the board for the tool wheel' },
           ...rest.map((k) => ({ label: T[k][1], icon: T[k][0], run: () => this.tool(k) })),
           { sep: true },
           { label: 'Undo (Ctrl+Z)', icon: 'undo', run: () => this.undo() },
           { label: 'Redo (Ctrl+Y)', icon: 'redo', run: () => this.redo() },
           { label: 'Trash', icon: 'trash', run: () => this.openTrash() },
-        ], false, true) }, icon('more', 20), el('span', {}, 'More'));
-        const grab = this.o.capture && el('button', { class: 'yb-grab', 'aria-label': 'Capture the current frame', onclick: () => this.tool('shot') }, icon('plus', 28));
-        this.side = el('div', { class: 'yb-side' },
-          el('div', { class: 'yb-sgroup' }, btn('line'), btn('board')),
-          grab,
-          el('div', { class: 'yb-sgroup' }, btn('column'), btn('comment'), more));
-        const hot = el('div', { class: 'yb-sidehot', 'aria-hidden': 'true' });
-        let hideT;
-        const show = () => { clearTimeout(hideT); this.side.classList.add('yb-open'); };
-        const hide = () => { clearTimeout(hideT); hideT = setTimeout(() => { if (this.menu.hidden && !this.side.matches(':hover')) this.side.classList.remove('yb-open'); }, 350); };
-        hot.addEventListener('pointerenter', show);
-        this.side.addEventListener('pointerenter', show);
-        this.side.addEventListener('pointerleave', hide);
-        this.side.addEventListener('focusin', show);
-        this.side.addEventListener('focusout', hide);
-        this._hideSide = hide;
-        toolbar = this.side;
-        r.append(this.head, el('div', { class: 'yb-body' }, this.vp, hot, this.side));
+        ]) }, icon('more', 17));
+        this.zoomLbl.after(more);
+        this.wheel = this._buildWheel(T);
+        r.append(this.head, el('div', { class: 'yb-body' }, this.vp), this.wheel);
       } else {
         this.flyout = el('div', { class: 'yb-flyout', hidden: true },
           ...MORE.map((k) => { const b = el('button', { class: 'yb-tool', onclick: () => { if (this._toolDragged) { this._toolDragged = false; return; } this.flyout.hidden = true; this.tool(k); } }, icon(T[k][0], 24), el('span', {}, T[k][1])); this._dragTool(b, k); return b; }));
@@ -264,8 +251,76 @@
       clearTimeout(this._tt); this._tt = setTimeout(() => { this.toastEl.hidden = true; }, 2600);
     }
 
+    // ---------- right-click tool wheel (YouTube panel) ----------
+    _buildWheel(T) {
+      const HEX = '<svg width="84" height="94" viewBox="-42 -47 84 94"><polygon points="0,-36 31.2,-18 31.2,18 0,36 -31.2,18 -31.2,-18"/></svg>';
+      // the pin points to the bottom-left; its hollow head fills on hover
+      const PIN = '<svg class="ybw-pin" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(45 12 12)"><path class="head" d="M8.5 3h7L14 4.5v4l3 3.5H7l3-3.5v-4z"/><path d="M12 12v9"/></g></svg>';
+      const SLOTS = [[40, -69.3], [80, 0], [40, 69.3], [-40, 69.3], [-80, 0], [-40, -69.3]]; // clockwise from top-right
+      const PANELS = [
+        ['link', 'heading', 'line', 'board', 'column', 'comment'],
+        ['table', 'sketch', this.o.aiGenerate ? 'ai' : 'upload_image', 'todo', 'draw', 'color'],
+      ];
+      const tile = (k, i) => {
+        const [dx, dy] = i < 0 ? [0, 0] : SLOTS[i];
+        const left = 158 + dx, top = 153 + dy;
+        return el('button', { class: 'ybw-t' + (i < 0 ? ' ybw-c' : ''), 'aria-label': T[k][1],
+          style: 'left:' + left + 'px;top:' + top + 'px;--ox:' + (200 - left) + 'px;--oy:' + (200 - top) + 'px',
+          onclick: (e) => { e.stopPropagation(); this._wheelPick(k); } },
+        el('span', { class: 'ybw-hx', 'aria-hidden': 'true', html: HEX }),
+        i < 0 ? el('span', { class: 'yb-ic', 'aria-hidden': 'true', html: PIN }) : icon(T[k][0], 22));
+      };
+      this._wsets = PANELS.map((ks, p) => el('div', { class: 'ybw-set', hidden: true, dataset: { p } }, ks.map(tile)));
+      const w = el('div', { class: 'ybw', hidden: true, role: 'menu', 'aria-label': 'Tools' },
+        ...this._wsets, this.o.capture ? tile('shot', -1) : null);
+      w.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); this._wheelShow(1 - this._wp); });
+      // close on any click outside it (not a right-click: that one flips the panel), on Esc, or when the board scrolls
+      document.addEventListener('pointerdown', (e) => { if (!w.hidden && e.button !== 2 && !w.contains(e.target)) this._wheelClose(); }, true);
+      document.addEventListener('keydown', (e) => { if (!w.hidden && e.key === 'Escape') { e.stopPropagation(); this._wheelClose(); } }, true);
+      this.vp.addEventListener('wheel', () => this._wheelClose(), { passive: true });
+      return w;
+    }
+    _wheelOpen(e) {
+      const w = this.wheel, rr = this.root.getBoundingClientRect(), hb = this.head.getBoundingClientRect().bottom - rr.top;
+      const R = 125; // reach of the wheel from its centre
+      const cx = rr.width < 2 * R ? rr.width / 2 : Math.max(R, Math.min(rr.width - R, e.clientX - rr.left));
+      const cy = rr.height - hb < 2 * R ? (hb + rr.height) / 2 : Math.max(hb + R, Math.min(rr.height - R, e.clientY - rr.top));
+      w.style.left = cx - 200 + 'px'; w.style.top = cy - 200 + 'px';
+      const p = this._toBoard(e.clientX, e.clientY);
+      this._wheelAt = { x: snap(p.x - 20), y: snap(p.y - 20) }; // new cards appear where you right-clicked
+      clearTimeout(this._wc);
+      w.hidden = false;
+      w.classList.remove('ybw-closing', 'ybw-open'); void w.offsetWidth; w.classList.add('ybw-open');
+      for (const set of this._wsets) { set.hidden = true; set.classList.remove('ybw-in', 'ybw-out'); }
+      this._wheelShow(0);
+    }
+    _wheelShow(p) {
+      const cur = this._wsets[p], other = this._wsets[1 - p];
+      clearTimeout(this._wt);
+      if (!other.hidden) {
+        other.classList.remove('ybw-in'); other.classList.add('ybw-out');
+        this._wt = setTimeout(() => { other.hidden = true; other.classList.remove('ybw-out'); }, 200);
+      }
+      cur.hidden = false;
+      cur.classList.remove('ybw-in', 'ybw-out'); void cur.offsetWidth; cur.classList.add('ybw-in');
+      this._wp = p;
+    }
+    _wheelClose() {
+      const w = this.wheel;
+      if (!w || w.hidden || w.classList.contains('ybw-closing')) return;
+      w.classList.add('ybw-closing');
+      this._wc = setTimeout(() => { w.hidden = true; w.classList.remove('ybw-closing'); }, 150);
+    }
+    _wheelPick(k) {
+      const at = this._wheelAt;
+      this._wheelClose();
+      this._dropAt = k === 'shot' ? null : at;
+      this.tool(k).finally(() => { this._dropAt = null; });
+    }
+
     // ---------- navigation ----------
     async open(boardId, focusItemId) {
+      if (this.wheel) this._wheelClose();
       if (this.editing) await this.commitEdit();
       const prev = this.boardId;
       this.boardId = boardId || HOME;
@@ -643,6 +698,14 @@
         const ln = e.target.closest('.yb-line, .yb-llabel');
         if (ln) { e.preventDefault(); this.sel = new Set([ln.dataset.id]); this._paintSel(); return this._lineMenu(ln.dataset.id, { x: e.clientX, y: e.clientY }); }
         const c = e.target.closest('.yb-item');
+        if (this.wheel) {
+          if (!c) {
+            e.preventDefault();
+            if (this.wheel.hidden || this.wheel.classList.contains('ybw-closing')) this._wheelOpen(e); else this._wheelShow(1 - this._wp);
+            return;
+          }
+          this._wheelClose();
+        }
         if (!c || e.target.closest('textarea,input')) return;
         e.preventDefault();
         if (!this.sel.has(c.dataset.id)) { this.sel = new Set([c.dataset.id]); this._paintSel(); }
@@ -1151,7 +1214,7 @@
       x = clamp(x, 6, rr.width - mw - 6); y = clamp(y, 6, rr.height - mh - 6);
       this.menu.style.left = x + 'px'; this.menu.style.top = y + 'px';
     }
-    _closeMenu() { this.menu.hidden = true; if (this._hideSide) this._hideSide(); }
+    _closeMenu() { this.menu.hidden = true; }
 
     _itemMenu(id, anchor) {
       const it = this.board.items.find((i) => i.id === id);
@@ -1607,8 +1670,7 @@
           // drop exactly where the preview was
           const pt = this._toBoard(ev.clientX - GRAB.x, ev.clientY - GRAB.y);
           this._dropAt = { x: Math.round(pt.x), y: Math.round(pt.y) };
-          this._dropping = true; // a card dragged in from the toolbar stays, even if left empty
-          this.tool(act).finally(() => { this._dropAt = null; this._dropping = false; });
+          this.tool(act).finally(() => { this._dropAt = null; });
         };
         window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
       });
@@ -1677,7 +1739,12 @@
       return YVN.findSlot(items, w, h, { after, maxW, left, top, sizeOf: (i) => this._rectOf(i) });
     }
 
+    /** A card made from a tool (toolbar, wheel or drag) stays on the board even if it is left empty. */
     async tool(act) {
+      this._keepNew = true;
+      try { return await this._tool(act); } finally { this._keepNew = false; }
+    }
+    async _tool(act) {
       if (this.editing) await this.commitEdit();
       if (act === 'shot') return this.captureShot();
       if (act === 'summary') {
@@ -1723,7 +1790,7 @@
       const it = await this.m.putItem(this.boardId, { type: 'note', text: o.text || '', video: o.video, color: o.color, w, ...p });
       await this.reload();
       this.focusItem(it.id, false);
-      if (o.edit !== false) { this._fresh = this._dropping ? null : it.id; this.startEdit(it.id); }
+      if (o.edit !== false) { this._fresh = this._keepNew ? null : it.id; this.startEdit(it.id); }
       return it;
     }
     async _addBoard() {
@@ -1738,7 +1805,7 @@
       const it = await this.m.putItem(this.boardId, { type: 'link', url, title: url ? await this._linkTitle(url) : '', w: YVN.CARD_W.link, ...p });
       await this.reload();
       this.focusItem(it.id, false);
-      if (!url) { this._fresh = this._dropping ? null : it.id; this.startEdit(it.id); }
+      if (!url) { this._fresh = this._keepNew ? null : it.id; this.startEdit(it.id); }
     }
 
     /** Add a captured frame { dataURL, w, h, ts, video } as a screenshot card next to the previous one. */
@@ -1878,7 +1945,7 @@
       const it = await this.m.putItem(this.boardId, { ...o, w, ...p });
       await this.reload();
       this.focusItem(it.id, false);
-      this._fresh = this._dropping ? null : it.id;
+      this._fresh = this._keepNew ? null : it.id;
       this.startEdit(it.id);
     }
     _patchEdit(it, c, inp, get, empty) {
@@ -2241,7 +2308,7 @@
       const it = await this.m.putItem(this.boardId, { type: 'comment', comments: [], w: YVN.CARD_W.comment, ...p });
       await this.reload();
       this.focusItem(it.id, false);
-      this._fresh = this._dropping ? null : it.id;
+      this._fresh = this._keepNew ? null : it.id;
       this.startEdit(it.id, { mode: 'reply' });
     }
     /** Who is writing: Google account name/photo when signed in, otherwise "我". */
@@ -2278,7 +2345,7 @@
       const it = await this.m.putItem(this.boardId, { type: 'color', hex: nextHex || palette[Math.floor(Math.random() * palette.length)], name: '', w: YVN.CARD_W.color, ...p });
       await this.reload();
       this.focusItem(it.id, false);
-      this._fresh = this._dropping ? null : it.id;
+      this._fresh = this._keepNew ? null : it.id;
       this.startEdit(it.id);
     }
 
