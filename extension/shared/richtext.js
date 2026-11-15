@@ -72,8 +72,9 @@
       }
       flushBuf();
       const center = n.style && n.style.textAlign === 'center';
-      if (t === 'p') pushPara(inlineMd(n), center);
-      else if (t === 'div') {
+      // Chrome nests a list made inside a paragraph as <p><ul>…</ul></p>: treat such a <p> like a <div> so the list survives
+      if (t === 'p' && ![...n.children].some((c) => BLOCK.test(c.tagName))) pushPara(inlineMd(n), center);
+      else if (t === 'p' || t === 'div') {
         if ([...n.children].some((c) => BLOCK.test(c.tagName))) { const inner = blockMd(n); if (inner) out.push(inner); }
         else pushPara(inlineMd(n), center);
       } else if (/^h[1-6]$/.test(t)) {
