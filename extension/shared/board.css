@@ -436,8 +436,13 @@ button.yb-playbadge:hover { background: #e5484d; transform: translate(-50%, -50%
 .ybw-c { color: #f4f4f5 !important; transform-origin: 50% 50%; }
 .ybw-c .ybw-hx polygon { fill: #3a3a3a; stroke: #3a3a3a; }
 .ybw-c:hover .ybw-hx polygon { fill: #474747; stroke: #474747; }
-.ybw-pin .head { fill: transparent; transition: fill .15s; }
-.ybw-c:hover .ybw-pin .head { fill: #e5484d; }
+/* pin hover: it lifts off the tile (up and away from its point), grows a touch, casts a shadow and then bobs gently */
+.ybw-pin { display: block; transition: transform .22s cubic-bezier(.3, 1.6, .5, 1), filter .22s ease; filter: drop-shadow(0 0 0 rgba(0, 0, 0, 0)); }
+.ybw-pin .head { fill: transparent; transition: fill .22s ease; }
+.ybw-c:hover .ybw-pin, .ybw-c:focus-visible .ybw-pin { transform: perspective(120px) translate(2px, -4px) rotateX(14deg) rotateY(-10deg) scale(1.1); filter: drop-shadow(-3px 6px 3px rgba(0, 0, 0, .6)); }
+.ybw-c:hover .ybw-pin .head { fill: rgba(255, 255, 255, .14); }
+.ybw-c:hover .ybw-pin-wrap { animation: ybwBob 1.8s ease-in-out .25s infinite; }
+@keyframes ybwBob { 50% { transform: translateY(-1.5px); } }
 .ybw.ybw-open .ybw-c { animation: ybwPop .22s cubic-bezier(.3, 1.4, .5, 1) both; }
 .ybw-in .ybw-t { animation: ybwIn .32s cubic-bezier(.2, .9, .3, 1.15) both; animation-delay: 110ms; }
 .ybw-out .ybw-t { animation: ybwOut .16s cubic-bezier(.5, 0, .9, .4) both; pointer-events: none; }
@@ -445,4 +450,4 @@ button.yb-playbadge:hover { background: #e5484d; transform: translate(-50%, -50%
 @keyframes ybwOut { to { transform: rotate(35deg) scale(.15); opacity: 0; } }
 @keyframes ybwPop { from { transform: scale(.5); opacity: 0; } }
 @keyframes ybwClose { to { opacity: 0; transform: scale(.85); } }
-@media (prefers-reduced-motion: reduce) { .ybw-t, .ybw { animation-duration: 1ms !important; animation-delay: 0ms !important; } }
+@media (prefers-reduced-motion: reduce) { .ybw-t, .ybw { animation-duration: 1ms !important; animation-delay: 0ms !important; } .ybw-pin { transition: none; } .ybw-c:hover .ybw-pin-wrap { animation: none; } }
