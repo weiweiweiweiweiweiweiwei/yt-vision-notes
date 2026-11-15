@@ -52,5 +52,10 @@
     if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyS') { e.preventDefault(); view.captureShot(); }
   }, true);
 
+  // pick up changes from other devices while this window is on screen
+  const pull = () => { if (!document.hidden) remote.send('pull').catch(() => {}); };
+  setInterval(pull, 15000);
+  document.addEventListener('visibilitychange', pull);
+
   view.open(params.get('board') || YVN.HOME);
 })();

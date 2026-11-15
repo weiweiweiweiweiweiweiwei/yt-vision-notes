@@ -66,25 +66,47 @@
     syncBtn.querySelector('span').textContent = S.syncing ? 'Syncing…' : S.error ? 'Sync failed' : tokenValid() ? 'Synced' : localStorage.getItem('yvnSignedIn') ? 'Reconnect' : 'Sign in with Google';
     syncBtn.title = S.error || 'Sync with Google Drive';
   }
-  async function sync(interactive) {
-    if (S.syncing) return;
+  /** quiet: a background check for other devices' changes; the button only changes if something goes wrong. */
+  async function sync(interactive, quiet) {
+    if (S.syncing) { if (!quiet) S.again = true; return; } // a change made mid-sync is uploaded right after it
+    if (quiet && syncTimer) return;
     if (!tokenValid()) {
       if (!interactive) return renderSync();
       try { await requestToken(localStorage.getItem('yvnSignedIn') ? '' : 'consent'); localStorage.setItem('yvnSignedIn', '1'); }
       catch (e) { S.error = e.message; renderSync(); toast(e.message); if (!clientId()) openSettings(); return; }
     }
-    S.syncing = true; S.error = ''; renderSync();
+    S.syncing = true; S.again = false;
+    if (!quiet) { S.error = ''; renderSync(); }
     try {
-      await store.sync(drive);
-      view.reload();
+      const r = await store.sync(drive);
+      if (!quiet || (r && r.pulled)) view.reload();
+      if (quiet && S.error) S.error = '';
     } catch (e) {
       console.error(e); S.error = e.message || String(e);
       if (interactive) toast('Sync failed: ' + S.error);
     }
     S.syncing = false; renderSync();
+    if (S.again) sync(false);
   }
-  let syncTimer;
-  const scheduleSync = () => { clearTimeout(syncTimer); syncTimer = setTimeout(() => sync(false), 2500); };
+  // Every change is uploaded right away: 300 ms after the last edit (a drag or typing burst is one upload),
+  // and never more than 1.5 s after the first one.
+  let syncTimer = null, syncFirst = 0;
+  const scheduleSync = () => {
+    const now = Date.now();
+    if (!syncTimer) syncFirst = now;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => { syncTimer = null; sync(false); }, Math.max(0, Math.min(300, syncFirst + 1500 - now)));
+  };
+  // pick up changes from other devices while the page is on screen
+  setInterval(() => { if (!document.hidden && tokenValid()) sync(false, true); }, 15000);
+  // Google gives the website 1-hour sign-ins with no silent renewal (that needs a server). Once one has run out,
+  // the next click anywhere renews it: a click is the only moment the browser lets the sign-in window open,
+  // and for an account that already agreed it closes again by itself.
+  document.addEventListener('pointerdown', () => {
+    if (tokenValid() || !localStorage.getItem('yvnSignedIn') || S.renewing || !clientId()) return;
+    S.renewing = true;
+    requestToken('').then(() => { renderSync(); sync(false); }, () => {}).finally(() => { S.renewing = false; });
+  }, true);
 
   // ---------- board API over the local store ----------
   const urlCache = new Map();
@@ -268,7 +290,7 @@
     const r = parseHash();
     view.open(r.board, r.item);
   });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && tokenValid()) scheduleSync(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && tokenValid()) sync(false, true); });
 
   // ---------- boot ----------
   window.yvnApp = { store, view, sync };

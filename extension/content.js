@@ -251,6 +251,10 @@
     }
   }
   document.addEventListener('yt-navigate-finish', tick);
+  // pick up changes from other devices while the notes are on screen
+  const pull = () => { if (S.on && !S.popped && !document.hidden) remote.send('pull').catch(() => {}); };
+  setInterval(pull, 15000);
+  document.addEventListener('visibilitychange', pull);
   setInterval(tick, 1000);
   window.addEventListener('resize', () => { if (S.on) applyWidth(); });
 

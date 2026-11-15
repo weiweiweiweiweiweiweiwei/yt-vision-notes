@@ -36,10 +36,13 @@ async function restoreStatus() {
 }
 const ready = restoreStatus();
 
-async function sync() {
+/** quiet: a background check for other devices' changes — the status dot only changes if something goes wrong. */
+async function sync(quiet) {
   await ready;
   if (!status.signedIn) return { skipped: true };
-  status.syncing = true; status.error = ''; pushStatus();
+  if (quiet && (status.syncing || syncTimer)) return { skipped: true }; // a full sync is running or about to
+  const hadError = status.error;
+  if (!quiet) { status.syncing = true; status.error = ''; pushStatus(); }
   try {
     const r = await store.sync(drive);
     status.lastSync = Date.now();
@@ -53,11 +56,19 @@ async function sync() {
     }
     return { error: status.error };
   } finally {
-    status.syncing = false; pushStatus();
+    if (!quiet) { status.syncing = false; pushStatus(); }
+    else if (status.error !== hadError) pushStatus();
   }
 }
-let syncTimer;
-function scheduleSync() { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 4000); }
+// Every change is uploaded right away: 300 ms after the last edit (so a drag or typing burst is one upload),
+// and never more than 1.5 s after the first one.
+let syncTimer = null, syncFirst = 0;
+function scheduleSync() {
+  const now = Date.now();
+  if (!syncTimer) syncFirst = now;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => { syncTimer = null; sync(); }, Math.max(0, Math.min(300, syncFirst + 1500 - now)));
+}
 
 async function signIn() {
   await getToken(false, true);
@@ -162,6 +173,8 @@ const handlers = {
   async signIn() { await signIn(); return { status: { ...status } }; },
   async signOut() { await signOut(); return { status: { ...status } }; },
   async syncNow() { const r = await sync(); return { result: r, status: { ...status } }; },
+  /** open panels / windows call this every few seconds to pick up changes made on other devices */
+  async pull() { await sync(true); return {}; },
 
   async popout({ boardId }, sender) {
     const tabId = sender.tab && sender.tab.id;
