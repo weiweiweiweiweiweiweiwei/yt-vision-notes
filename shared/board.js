@@ -254,7 +254,7 @@
     // ---------- right-click tool wheel (YouTube panel) ----------
     _buildWheel(T) {
       const HEX = '<svg width="84" height="94" viewBox="-42 -47 84 94"><polygon points="0,-36 31.2,-18 31.2,18 0,36 -31.2,18 -31.2,-18"/></svg>';
-      // the pin points to the bottom-left and floats up off the tile on hover (see .ybw-pin in board.css)
+      // the pin points to the bottom-left and levitates above the tile on hover (see .ybw-pin-wrap in board.css)
       const PIN = '<svg class="ybw-pin" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(45 12 12)"><path class="head" d="M8.5 3h7L14 4.5v4l3 3.5H7l3-3.5v-4z"/><path d="M12 12v9"/></g></svg>';
       const SLOTS = [[40, -69.3], [80, 0], [40, 69.3], [-40, 69.3], [-80, 0], [-40, -69.3]]; // clockwise from top-right
       const PANELS = [
@@ -268,6 +268,7 @@
           style: 'left:' + left + 'px;top:' + top + 'px;--ox:' + (200 - left) + 'px;--oy:' + (200 - top) + 'px',
           onclick: (e) => { e.stopPropagation(); this._wheelPick(k); } },
         el('span', { class: 'ybw-hx', 'aria-hidden': 'true', html: HEX }),
+        i < 0 && el('span', { class: 'ybw-pshadow', 'aria-hidden': 'true' }),
         i < 0 ? el('span', { class: 'yb-ic ybw-pin-wrap', 'aria-hidden': 'true', html: PIN }) : icon(T[k][0], 22));
       };
       this._wsets = PANELS.map((ks, p) => el('div', { class: 'ybw-set', hidden: true, dataset: { p } }, ks.map(tile)));
