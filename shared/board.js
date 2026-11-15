@@ -174,10 +174,11 @@
         return b;
       };
       let toolbar;
-      if (this.mode === 'panel') {
-        // YouTube panel: no tool bar. Right-click empty board space opens the tool wheel at the pointer
+      if (this.mode === 'panel' || this.mode === 'web') {
+        // YouTube panel and website: no tool bar. Right-click empty board space opens the tool wheel at the pointer
         // (right-click again flips between its two panels); everything else is in the header's ⋯ menu.
-        const WHEEL = new Set(['shot', 'link', 'heading', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'todo', 'draw', 'color', this.o.aiGenerate ? 'ai' : 'upload_image']);
+        const layout = this._wheelLayout();
+        const WHEEL = new Set([layout.center, ...layout.panels.flat()]);
         const rest = ['summary', 'ai', ...MAIN, ...MORE, ...LOWER].filter((k, i, all) => T[k] && !WHEEL.has(k) && all.indexOf(k) === i && (k !== 'summary' || this.o.capture) && (k !== 'ai' || this.o.aiGenerate));
         const more = el('button', { class: 'yb-hbtn', title: 'More tools', 'aria-label': 'More tools', onclick: (e) => this._menuAt(e.currentTarget, [
           { heading: 'Right-click the board for the tool wheel' },
@@ -188,7 +189,7 @@
           { label: 'Trash', icon: 'trash', run: () => this.openTrash() },
         ]) }, icon('more', 17));
         this.zoomLbl.after(more);
-        this.wheel = this._buildWheel(T);
+        this.wheel = this._buildWheel(T, layout);
         r.append(this.head, el('div', { class: 'yb-body' }, this.vp), this.wheel);
       } else {
         this.flyout = el('div', { class: 'yb-flyout', hidden: true },
@@ -251,29 +252,38 @@
       clearTimeout(this._tt); this._tt = setTimeout(() => { this.toastEl.hidden = true; }, 2600);
     }
 
-    // ---------- right-click tool wheel (YouTube panel) ----------
-    _buildWheel(T) {
+    // ---------- right-click tool wheel (YouTube panel and website) ----------
+    /** Which tools sit where. With a video (capture) the centre is the pin; on the website it is Image. */
+    _wheelLayout() {
+      const cap = !!this.o.capture;
+      return {
+        center: cap ? 'shot' : 'upload_image',
+        panels: [
+          ['link', 'heading', 'line', 'board', 'column', 'comment'],
+          ['table', 'sketch', this.o.aiGenerate ? 'ai' : cap ? 'upload_image' : 'upload', 'todo', 'draw', 'color'],
+        ],
+      };
+    }
+    _buildWheel(T, layout) {
       const HEX = '<svg width="84" height="94" viewBox="-42 -47 84 94"><polygon points="0,-36 31.2,-18 31.2,18 0,36 -31.2,18 -31.2,-18"/></svg>';
       // the pin points to the bottom-left and levitates above the tile on hover (see .ybw-pin-wrap in board.css)
       const PIN = '<svg class="ybw-pin" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(45 12 12)"><path class="head" d="M8.5 3h7L14 4.5v4l3 3.5H7l3-3.5v-4z"/><path d="M12 12v9"/></g></svg>';
       const SLOTS = [[40, -69.3], [80, 0], [40, 69.3], [-40, 69.3], [-80, 0], [-40, -69.3]]; // clockwise from top-right
-      const PANELS = [
-        ['link', 'heading', 'line', 'board', 'column', 'comment'],
-        ['table', 'sketch', this.o.aiGenerate ? 'ai' : 'upload_image', 'todo', 'draw', 'color'],
-      ];
+      const PANELS = layout.panels;
       const tile = (k, i) => {
+        const pin = k === 'shot';
         const [dx, dy] = i < 0 ? [0, 0] : SLOTS[i];
         const left = 158 + dx, top = 153 + dy;
         return el('button', { class: 'ybw-t' + (i < 0 ? ' ybw-c' : ''), 'aria-label': T[k][1],
           style: 'left:' + left + 'px;top:' + top + 'px;--ox:' + (200 - left) + 'px;--oy:' + (200 - top) + 'px',
           onclick: (e) => { e.stopPropagation(); this._wheelPick(k); } },
         el('span', { class: 'ybw-hx', 'aria-hidden': 'true', html: HEX }),
-        i < 0 && el('span', { class: 'ybw-pshadow', 'aria-hidden': 'true' }),
-        i < 0 ? el('span', { class: 'yb-ic ybw-pin-wrap', 'aria-hidden': 'true', html: PIN }) : icon(T[k][0], 22));
+        pin && el('span', { class: 'ybw-pshadow', 'aria-hidden': 'true' }),
+        pin ? el('span', { class: 'yb-ic ybw-pin-wrap', 'aria-hidden': 'true', html: PIN }) : icon(T[k][0], i < 0 ? 26 : 22));
       };
       this._wsets = PANELS.map((ks, p) => el('div', { class: 'ybw-set', hidden: true, dataset: { p } }, ks.map(tile)));
       const w = el('div', { class: 'ybw', hidden: true, role: 'menu', 'aria-label': 'Tools' },
-        ...this._wsets, this.o.capture ? tile('shot', -1) : null);
+        ...this._wsets, tile(layout.center, -1));
       w.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); this._wheelShow(1 - this._wp); });
       // close on any click outside it (not a right-click: that one flips the panel), on Esc, or when the board scrolls
       document.addEventListener('pointerdown', (e) => { if (!w.hidden && e.button !== 2 && !w.contains(e.target)) this._wheelClose(); }, true);
@@ -290,6 +300,7 @@
       const p = this._toBoard(e.clientX, e.clientY);
       this._wheelAt = { x: snap(p.x - 20), y: snap(p.y - 20) }; // new cards appear where you right-clicked
       clearTimeout(this._wc);
+      this._closeMenu();
       w.hidden = false;
       w.classList.remove('ybw-closing', 'ybw-open'); void w.offsetWidth; w.classList.add('ybw-open');
       for (const set of this._wsets) { set.hidden = true; set.classList.remove('ybw-in', 'ybw-out'); }
