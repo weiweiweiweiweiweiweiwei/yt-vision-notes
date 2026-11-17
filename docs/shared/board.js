@@ -494,8 +494,7 @@
       if (this.layer.firstChild !== this.svgRoot) this.layer.prepend(this.svgRoot, this.lbls);
       const keep = new Set();
       const kids = new Map();
-      // nodes are numbered 01, 02… from left to right (top to bottom for the same x)
-      this._nodeNum = new Map(live.filter(isNodeItem).sort((a, b) => a.x - b.x || a.y - b.y).map((n, k) => [n.id, String(k + 1).padStart(2, '0')]));
+      this._nodeNum = this._numberNodes(live);
       for (const it of live) {
         if (it.type === 'line' || it.type === 'ink') { keep.add(it.id); continue; }
         keep.add(it.id);
@@ -673,7 +672,39 @@
       if (it.type !== 'board') c.append(el('div', { class: 'yb-rs' + (FREE_H.has(it.type) ? ' yb-rs2' : ''), title: 'Drag to resize' }));
       return c;
     }
-    /** Green input (left / top) and output (right / bottom) of a node. The first node (01) has no input. */
+    /**
+     * Node numbers count within each connected chain: every chain (and every lone node) starts at 01.
+     * Inside a chain the order follows the links (a node comes after the nodes feeding it); ties and loops
+     * go left to right, then top to bottom.
+     */
+    _numberNodes(live) {
+      const nodes = live.filter(isNodeItem);
+      const byId = new Map(nodes.map((n) => [n.id, n]));
+      const links = live.filter((l) => l.type === 'line' && l.node && l.from && l.to && byId.has(l.from.id) && byId.has(l.to.id) && l.from.id !== l.to.id);
+      const root = new Map(nodes.map((n) => [n.id, n.id]));
+      const find = (x) => { while (root.get(x) !== x) { root.set(x, root.get(root.get(x))); x = root.get(x); } return x; };
+      for (const l of links) root.set(find(l.from.id), find(l.to.id));
+      const groups = new Map();
+      for (const n of nodes) { const g = find(n.id); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(n); }
+      const pos = (a, b) => a.x - b.x || a.y - b.y;
+      const out = new Map();
+      for (const grp of groups.values()) {
+        const indeg = new Map(grp.map((n) => [n.id, 0]));
+        for (const l of links) if (indeg.has(l.to.id)) indeg.set(l.to.id, indeg.get(l.to.id) + 1);
+        const ready = grp.filter((n) => !indeg.get(n.id));
+        const order = [];
+        while (ready.length) {
+          ready.sort(pos);
+          const n = ready.shift();
+          order.push(n);
+          for (const l of links) if (l.from.id === n.id && indeg.has(l.to.id)) { indeg.set(l.to.id, indeg.get(l.to.id) - 1); if (!indeg.get(l.to.id)) ready.push(byId.get(l.to.id)); }
+        }
+        for (const n of grp.filter((m) => !order.includes(m)).sort(pos)) order.push(n); // loops
+        order.forEach((n, k) => out.set(n.id, String(k + 1).padStart(2, '0')));
+      }
+      return out;
+    }
+    /** Green input (left / top) and output (right / bottom) of a node. 01 (the start of a chain) shows no input dot, but a link can still be dropped on it. */
     _ports(c, it) {
       const v = it.type !== 'board' && it.nport === 'v';
       const shape = (inner) => '<svg viewBox="0 0 14 14" width="14" height="14">' + inner + '</svg>';
@@ -1854,7 +1885,7 @@
     }
     async _linkNodes(a, b) {
       const dup = YVN.liveItems(this.board).some((l) => l.type === 'line' && l.node && l.from && l.to && l.from.id === a && l.to.id === b);
-      if (a === b || dup || this._nodeNum.get(b) === '01') return; // 01 has no input
+      if (a === b || dup) return;
       await this.m.putItem(this.boardId, { type: 'line', node: true, from: { id: a, port: 'out' }, to: { id: b, port: 'in' }, arrow: 'none', color: null, label: '' });
     }
 
