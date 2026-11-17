@@ -75,6 +75,7 @@
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     unlock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+    node: '<rect x="5" y="6" width="14" height="12" rx="2"/><path d="M5 14h14M2 10l2 2-2 2M20 10h2v4h-2"/>',
     pdf: '<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/><rect x="3" y="11" width="9" height="5" rx="1" fill="#e5484d" stroke="none"/>',
     png: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m4 19 6-6 4 4 2-2 4 4" stroke="#30a46c"/><circle cx="16" cy="9" r="2" fill="#f5a524" stroke="#f5a524"/>',
   };
@@ -163,12 +164,13 @@
         upload_image: ['image', 'Image', 'Add an image (or paste / drop one)'],
         upload: ['upload', 'Upload', 'Upload any file (PDF, audio, video…)'],
         draw: ['draw', 'Draw', 'Draw freehand on the board'],
+        node: ['node', 'Node (Alt+S)', 'Node: Alt+S adds one after the selected node, Alt+P a parallel one'],
       };
       // No tool bar (YouTube panel, pop-out window and website alike): right-click empty board space opens the
       // tool wheel at the pointer, right-click again flips between its two panels; every other tool is in the header's ⋯ menu.
       const layout = this._wheelLayout();
       const onWheel = new Set([layout.center, ...layout.panels.flat()]);
-      const rest = ['summary', 'ai', 'shot', 'note', 'link', 'todo', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'color',
+      const rest = ['node', 'summary', 'ai', 'shot', 'note', 'link', 'todo', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'color',
         'heading', 'video', 'map', 'audio', 'doc', 'upload_image', 'upload', 'draw']
         .filter((k) => !onWheel.has(k) && (k !== 'summary' || this.o.capture) && (k !== 'shot' || this.o.capture) && (k !== 'ai' || this.o.aiGenerate));
       const more = el('button', { class: 'yb-hbtn', title: 'More tools', 'aria-label': 'More tools', onclick: (e) => this._menuAt(e.currentTarget, [
@@ -491,12 +493,14 @@
       if (this.layer.firstChild !== this.svgRoot) this.layer.prepend(this.svgRoot, this.lbls);
       const keep = new Set();
       const kids = new Map();
+      // nodes are numbered 01, 02… from left to right (top to bottom for the same x)
+      this._nodeNum = new Map(live.filter((i) => i.type === 'board' && i.node).sort((a, b) => a.x - b.x || a.y - b.y).map((n, k) => [n.id, String(k + 1).padStart(2, '0')]));
       for (const it of live) {
         if (it.type === 'line' || it.type === 'ink') { keep.add(it.id); continue; }
         keep.add(it.id);
         let e = this.els.get(it.id);
         const s = it.type === 'board' ? this.sums[it.boardId] || {} : {};
-        const sig = [it.updatedAt, it.locked, it.collapsed, it.type === 'board' ? [s.title, s.color, s.itemCount] : '', it.image && it.image.editedAt, (it.comments || []).length].join('|');
+        const sig = [it.updatedAt, it.locked, it.collapsed, it.type === 'board' ? [s.title, s.color, s.itemCount, this._nodeNum.get(it.id)] : '', it.image && it.image.editedAt, (it.comments || []).length].join('|');
         if (!e || (e._sig !== sig && this.editing !== it.id)) {
           const fresh = this._card(it);
           fresh._sig = sig;
@@ -567,6 +571,16 @@
           c.append(foot);
         }
         if (it.text) c.append(el('div', { class: 'yb-cap' }, this._md(it.text)));
+      } else if (it.type === 'board' && it.node) {
+        // DaVinci Resolve style node: name above, thumbnail slot, number below, green input (left) / output (right)
+        const s = this.sums[it.boardId] || {};
+        c.classList.add('yb-node');
+        c.append(el('div', { class: 'yb-nlabel' }, s.title || ''),
+          el('div', { class: 'yb-nbody' },
+            el('div', { class: 'yb-nthumb' }, icon('image', 20)),
+            el('div', { class: 'yb-nbar' }, el('span', { class: 'yb-nnum' }, this._nodeNum.get(it.id) || ''))),
+          el('span', { class: 'yb-port yb-pin', dataset: { port: 'in' }, title: 'Input: drag to a node to connect' }),
+          el('span', { class: 'yb-port yb-pout', dataset: { port: 'out' }, title: 'Output: drag to a node to connect' }));
       } else if (it.type === 'board') {
         const s = this.sums[it.boardId] || {};
         c.append(el('div', { class: 'yb-bicon', style: `background:${s.color || '#8b8d98'}` }, el('i'), el('i'), el('i'), el('i')),
@@ -774,6 +788,10 @@
         e.preventDefault();
         this.gesture = { kind: 'line-new', start, from: this._pendingFrom || this._endAt(e, null) };
         this._pendingFrom = null;
+      } else if (e.button === 0 && t.closest('.yb-port')) {
+        e.preventDefault();
+        const p = t.closest('.yb-port'), id = p.closest('.yb-item').dataset.id;
+        this.gesture = { kind: 'line-link', start, id, port: p.dataset.port, from: this._endBox({ id, port: p.dataset.port }) };
       } else if (e.button === 0 && t.closest('.yb-hnd')) {
         const h = t.closest('.yb-hnd');
         this.gesture = { kind: 'line-end', start, id: h.dataset.line, end: h.dataset.end };
@@ -852,7 +870,7 @@
         gst.moved = true;
         gst.d = { x: dx / this.view.z, y: dy / this.view.z };
         this._renderLines();
-      } else if (gst.kind === 'line-new' || gst.kind === 'line-end') {
+      } else if (gst.kind === 'line-new' || gst.kind === 'line-end' || gst.kind === 'line-link') {
         gst.pt = this._toBoard(e.clientX, e.clientY);
         gst.moved = gst.moved || Math.abs(dx) + Math.abs(dy) > 4;
         this._renderLines();
@@ -955,6 +973,28 @@
         const ddx = (e.clientX - gst.start.x) / this.view.z, ddy = (e.clientY - gst.start.y) / this.view.z;
         const from = { x: Math.round(G.pa.x + ddx), y: Math.round(G.pa.y + ddy) }, to = { x: Math.round(G.pb.x + ddx), y: Math.round(G.pb.y + ddy) };
         await this.m.patchItems(this.boardId, [{ id: ln.id, from, to }]);
+        return this.reload();
+      }
+      if (gst.kind === 'line-link') {
+        if (!gst.moved) { this._renderLines(); return; }
+        const hit = document.elementFromPoint(e.clientX, e.clientY);
+        const card = hit && hit.closest && hit.closest('.yb-node');
+        const other = card && card.dataset.id !== gst.id ? card.dataset.id : null;
+        if (other) {
+          const [a, b] = gst.port === 'out' ? [gst.id, other] : [other, gst.id];
+          await this._linkNodes(a, b);
+        } else if (!card) {
+          // dropped on empty board: a new node there, already connected
+          const p = this._toBoard(e.clientX, e.clientY);
+          const at = { x: snap(p.x - (gst.port === 'out' ? 10 : YVN.CARD_W.node - 10)), y: snap(p.y - 32) };
+          const before = await this._snap([this.boardId]);
+          const { item } = await this.api.createBoard(this.boardId, { ...at, title: '', color: '#8b8d98', node: true });
+          await this._putLink(gst.port === 'out' ? gst.id : item.id, gst.port === 'out' ? item.id : gst.id);
+          await this._pushHistory([this.boardId], before);
+          await this.reload();
+          this.sel = new Set([item.id]); this._paintSel();
+          return;
+        }
         return this.reload();
       }
       if (gst.kind === 'line-end') {
@@ -1160,6 +1200,7 @@
       if (e.key === 'Escape' && this._lineMode) { this._lineMode = false; this.vp.classList.remove('yb-linemode'); return; }
       if (e.key === 'Escape') { this._closeMenu(); this._closeCpop(); this.trashBox.hidden = true; this.toggleSearch(false); this.sel.clear(); this._paintSel(); return; }
       if ((e.key === 'Delete' || e.key === 'Backspace') && this.sel.size) { e.preventDefault(); this.deleteSelected(); return; }
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'KeyS' || e.code === 'KeyP')) { e.preventDefault(); this.addNode(e.code === 'KeyS' ? 'serial' : 'parallel'); return; }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); this.sel = new Set(YVN.liveItems(this.board).map((i) => i.id)); this._paintSel(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); this.toggleSearch(true); return; }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
@@ -1228,7 +1269,7 @@
         return this._menuAt(anchor, [lockEntry, { label: 'Draw line from this card', icon: 'line', run: () => this._startLineFrom(it.id) }, colorEntry, { sep: true }, delEntry]);
       }
       if (!multi) {
-        if (it.type === 'board') entries.push({ label: 'Open', icon: 'board', run: () => this.open(it.boardId) });
+        if (it.type === 'board') entries.push({ label: 'Open', icon: 'board', run: () => this.open(it.boardId) }, { label: 'Rename', icon: 'heading', run: () => this._renameCard(it) });
         if (it.type === 'todo') entries.push(it.title ? { label: 'Remove title', icon: 'heading', run: async () => { await this.m.patchItems(this.boardId, [{ id: it.id, title: null }]); this.reload(); } } : { label: 'Add title', icon: 'heading', run: () => this.startEdit(it.id, { addTitle: true }) });
         if (it.type === 'map' && it.query) entries.push({ label: 'Change place', icon: 'map', run: () => this.startEdit(it.id) });
         if (it.type === 'shot' || it.type === 'image') entries.push({ label: 'Open annotation editor', icon: 'image', run: () => this.openEditor(it.id) });
@@ -1604,14 +1645,15 @@
     }
 
     _renameInline(span, boardId) {
-      const inp = el('input', { class: 'yb-input yb-rename', value: this._title(boardId) });
+      const cur = (this.sums[boardId] && this.sums[boardId].title) || '';
+      const inp = el('input', { class: 'yb-input yb-rename', value: cur || this._title(boardId), placeholder: 'Name' });
       span.replaceWith(inp);
       inp.focus(); inp.select();
       let done = false;
       const finish = async (save) => {
         if (done) return; done = true;
         const v = inp.value.trim();
-        if (save && v && v !== this._title(boardId)) await this.api.updateBoard(boardId, { title: v });
+        if (save && v !== cur && (v || cur)) await this.api.updateBoard(boardId, { title: v });
         this.reload();
       };
       inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
@@ -1620,7 +1662,7 @@
     }
     _renameCard(it) {
       const c = this.els.get(it.id);
-      const t = c && c.querySelector('.yb-btitle');
+      const t = c && c.querySelector('.yb-btitle, .yb-nlabel');
       if (t) { const s = el('span'); t.replaceChildren(s); this._renameInline(s, it.boardId); }
     }
 
@@ -1656,6 +1698,7 @@
       if (act === 'note') return this._addNote({});
       if (act === 'todo') return this._addSimple({ type: 'todo', todos: [] });
       if (act === 'board') return this._addBoard();
+      if (act === 'node') return this.addNode('serial', this._dropAt || null);
       if (act === 'link') return this._addLink('');
       if (act === 'column') return this._addColumn();
       if (act === 'color') return this._addColor();
@@ -1694,6 +1737,61 @@
       if (o.edit !== false) { this._fresh = this._keepNew ? null : it.id; this.startEdit(it.id); }
       return it;
     }
+    // ---------- DaVinci-style nodes ----------
+    /**
+     * kind 'serial' (Alt+S): a node right after the selected one, taking over its outgoing links.
+     * kind 'parallel' (Alt+P): a node below it that shares its inputs and outputs.
+     * With no node selected it follows the right-most node (or starts a new chain). One Ctrl+Z undoes it.
+     */
+    async addNode(kind = 'serial', at = null) {
+      if (!this.board) return null;
+      if (this.editing) await this.commitEdit();
+      const live = YVN.liveItems(this.board);
+      const isNode = (i) => i && i.type === 'board' && i.node;
+      const nodes = live.filter(isNode);
+      const links = live.filter((i) => i.type === 'line' && i.node && i.from && i.to && i.from.id && i.to.id);
+      let cur = at ? null : [...this.sel].map((id) => live.find((i) => i.id === id)).find(isNode) || null;
+      if (!cur && !at && nodes.length) cur = nodes.reduce((a, b) => (b.x > a.x || (b.x === a.x && b.y > a.y) ? b : a));
+      const NW = YVN.CARD_W.node, NH = 92, GX = 70, GY = 60;
+      const busy = (p, skip) => nodes.some((n) => !skip.has(n.id) && Math.abs(n.x - p.x) < NW && Math.abs(n.y - p.y) < NH);
+      let pos, shift = new Set();
+      if (at) pos = at;
+      else if (!cur) pos = this._slot(NW, NH);
+      else if (kind === 'serial') {
+        pos = { x: cur.x + NW + GX, y: cur.y };
+        // make room: everything downstream of cur, and whatever sits on the new spot, moves one step right
+        const q = [cur.id];
+        while (q.length) { const id = q.shift(); for (const l of links) if (l.from.id === id && l.to.id !== cur.id && !shift.has(l.to.id)) { shift.add(l.to.id); q.push(l.to.id); } }
+        for (const n of nodes) if (n.id !== cur.id && n.x >= pos.x - NW / 2 && Math.abs(n.y - pos.y) < NH) shift.add(n.id);
+      } else {
+        pos = { x: cur.x, y: cur.y + NH + GY };
+        while (busy(pos, new Set())) pos = { x: pos.x, y: pos.y + NH + GY };
+      }
+      const before = await this._snap([this.boardId]);
+      if (shift.size) await this.api.patchItems(this.boardId, nodes.filter((n) => shift.has(n.id)).map((n) => ({ id: n.id, x: n.x + NW + GX })));
+      const { item } = await this.api.createBoard(this.boardId, { x: Math.round(pos.x), y: Math.round(pos.y), title: '', color: '#8b8d98', node: true });
+      if (cur && kind === 'serial') {
+        const outs = links.filter((l) => l.from.id === cur.id);
+        if (outs.length) await this.api.patchItems(this.boardId, outs.map((l) => ({ id: l.id, from: { id: item.id, port: 'out' } })));
+        await this._putLink(cur.id, item.id);
+      } else if (cur) {
+        for (const l of links.filter((x) => x.to.id === cur.id)) await this._putLink(l.from.id, item.id);
+        for (const l of links.filter((x) => x.from.id === cur.id)) await this._putLink(item.id, l.to.id);
+      }
+      await this._pushHistory([this.boardId], before);
+      await this.reload();
+      this.sel = new Set([item.id]); this._paintSel();
+      return item;
+    }
+    _putLink(a, b) {
+      return this.api.putItem(this.boardId, { type: 'line', node: true, from: { id: a, port: 'out' }, to: { id: b, port: 'in' }, arrow: 'none', color: null, label: '' });
+    }
+    async _linkNodes(a, b) {
+      const dup = YVN.liveItems(this.board).some((l) => l.type === 'line' && l.node && l.from && l.to && l.from.id === a && l.to.id === b);
+      if (a === b || dup) return;
+      await this.m.putItem(this.boardId, { type: 'line', node: true, from: { id: a, port: 'out' }, to: { id: b, port: 'in' }, arrow: 'none', color: null, label: '' });
+    }
+
     async _addBoard() {
       const p = this._slot(YVN.CARD_W.board, 120);
       const { item } = await this.m.createBoard(this.boardId, { ...p, title: 'New Board', color: YVN.BOARD_COLORS[Math.floor(Math.random() * 8)] });
@@ -2272,6 +2370,10 @@
     /** Resolve a stored end ({id?, x, y}) to a point or a card box. */
     _endBox(end) {
       if (!end) return { x: 0, y: 0 };
+      if (end.id && end.port) {
+        const pe = this.els.get(end.id), dot = pe && pe.isConnected && pe.querySelector(end.port === 'out' ? '.yb-pout' : '.yb-pin');
+        if (dot && dot.getClientRects().length) { const r = this._layerRect(dot); return { x: r.x + r.w / 2, y: r.y + r.h / 2 }; }
+      }
       if (end.id) {
         const c = this.els.get(end.id);
         if (c && c.isConnected) {
@@ -2352,7 +2454,7 @@
         const G = this._lineGeom(A, B, ln.bend, midPt);
         const { pa, pb, d } = G;
         const color = ln.color || 'var(--yb-linec)';
-        const g = mk('g', { class: 'yb-line' + (selected ? ' yb-lsel' : '') + (preview ? ' yb-lprev' : ''), 'data-id': ln.id || '' });
+        const g = mk('g', { class: 'yb-line' + (ln.node ? ' yb-nlink' : '') + (selected ? ' yb-lsel' : '') + (preview ? ' yb-lprev' : ''), 'data-id': ln.id || '' });
         if (!preview) g.append(mk('path', { d, class: 'yb-hit' }));
         g.append(mk('path', { d, class: 'yb-vis', style: `stroke:${color}` }));
         if (ln.arrow === 'end' || ln.arrow === 'both') arrow(g, pb, G.ta, color);
@@ -2398,6 +2500,7 @@
         this.svg.append(g);
       }
       if (gst && gst.kind === 'line-new' && gst.pt) draw({ arrow: 'end' }, this._endBox(gst.from), gst.pt, false, true);
+      if (gst && gst.kind === 'line-link' && gst.pt) draw({ node: true, arrow: 'none' }, gst.from, gst.pt, false, true);
     }
     _lineMenu(id, anchor) {
       const ln = this.board.items.find((i) => i.id === id);

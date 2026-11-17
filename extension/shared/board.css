@@ -423,3 +423,23 @@ button.yb-playbadge:hover { background: #e5484d; transform: translate(-50%, -50%
 @keyframes ybwPop { from { transform: scale(.5); opacity: 0; } }
 @keyframes ybwClose { to { opacity: 0; transform: scale(.85); } }
 @media (prefers-reduced-motion: reduce) { .ybw-t, .ybw { animation-duration: 1ms !important; animation-delay: 0ms !important; } .ybw-c:hover .ybw-pin-wrap, .ybw-c:hover .ybw-pshadow { animation: none; } }
+
+/* ---------- DaVinci Resolve style nodes ---------- */
+.yb-item.yb-board.yb-node { display: block; padding: 0; text-align: left; background: transparent; border: 0; box-shadow: none; overflow: visible; }
+.yb-node.yb-sel { outline: none; }
+.yb-node .yb-rs { display: none; }
+.yb-nlabel { position: absolute; left: -30px; right: -30px; bottom: 100%; margin-bottom: 5px; text-align: center; font-size: 13px; line-height: 1.2; color: var(--yb-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.yb-nlabel .yb-rename { pointer-events: auto; text-align: center; height: 24px; }
+.yb-nbody { padding: 4px 4px 0; border: 1px solid #3c3d43; border-radius: 6px; background: #2a2b30; box-shadow: 0 2px 8px rgba(0, 0, 0, .35); }
+.yb-nthumb { height: 58px; display: grid; place-items: center; border-radius: 3px; background: #1b1c20; color: #50525a; }
+.yb-nbar { height: 24px; display: flex; align-items: center; padding: 0 4px; border-top: 2px solid #8e9198; margin-top: 4px; font-size: 13px; color: #e4e4e7; font-variant-numeric: tabular-nums; }
+.yb-node.yb-sel .yb-nbody { border-color: #e5484d; box-shadow: 0 0 0 1px #e5484d, 0 2px 8px rgba(0, 0, 0, .35); }
+.yb-port { position: absolute; top: 24px; width: 20px; height: 20px; cursor: crosshair; z-index: 2; }
+.yb-port::before { content: ""; position: absolute; left: 5px; top: 5px; width: 10px; height: 10px; background: #3fb950; transition: transform .12s, background .12s; }
+.yb-pin { left: -21px; }
+.yb-pin::before { clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.yb-pout { right: -21px; }
+.yb-pout::before { border-radius: 1px; }
+.yb-port:hover::before { background: #6ee07f; transform: scale(1.25); }
+.yb-lines .yb-nlink .yb-vis { stroke: #a5a7ad !important; stroke-width: 2; }
+.yb-lines .yb-nlink.yb-lsel .yb-vis { stroke: #e5484d !important; }

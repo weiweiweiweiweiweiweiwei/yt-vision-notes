@@ -164,7 +164,7 @@
   //   video = { id, title, channel }
   // =====================================================================================
   YVN.BOARD_COLORS = ['#e5484d', '#f76b15', '#f5a524', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#8b8d98'];
-  YVN.CARD_W = { note: 260, shot: 240, image: 240, board: 120, link: 240, column: 300, color: 160, comment: 280, todo: 300, heading: 420, table: 380, sketch: 300, video: 360, map: 320, file: 260, audio: 300, doc: 240 };
+  YVN.CARD_W = { node: 124, note: 260, shot: 240, image: 240, board: 120, link: 240, column: 300, color: 160, comment: 280, todo: 300, heading: 420, table: 380, sketch: 300, video: 360, map: 320, file: 260, audio: 300, doc: 240 };
 
   YVN.emptyBoard = (id, title, parentId) => {
     const now = Date.now();
@@ -243,7 +243,7 @@
     if (it.type === 'shot' || it.type === 'image') {
       const im = it.image || {};
       h = Math.round(w * ((im.h || 9) / (im.w || 16))) + (it.type === 'shot' || it.text ? 34 : 0) + (it.text ? Math.ceil(it.text.length / 18) * 20 : 0);
-    } else if (it.type === 'board') h = 120;
+    } else if (it.type === 'board') h = it.node ? 92 : 120;
     else if (it.type === 'line') return { w: 0, h: 0 };
     else if (it.type === 'column') h = 300;
     else if (it.type === 'color') h = 160;

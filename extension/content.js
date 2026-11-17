@@ -259,10 +259,11 @@
   window.addEventListener('resize', () => { if (S.on) applyWidth(); });
 
   document.addEventListener('keydown', (e) => {
-    if (!(S.on && S.videoId && e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyS')) return;
+    // Alt+S: serial node, Alt+P: parallel node (the pop-out window handles its own keys)
+    if (!(S.on && !S.popped && ui.view && e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'KeyS' || e.code === 'KeyP'))) return;
+    if (e.target.closest && e.target.closest('input, textarea, [contenteditable="true"]')) return;
     e.preventDefault(); e.stopPropagation();
-    if (!S.popped && ui.view) { ui.view.captureShot(); return; }
-    try { remote.send('shotToPopout', { cap: captureFrame() }); } catch (err) { toast(err.message); }
+    ui.view.addNode(e.code === 'KeyS' ? 'serial' : 'parallel');
   }, true);
 
   remote.onMessage((m) => {

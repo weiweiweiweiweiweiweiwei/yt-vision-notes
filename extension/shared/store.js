@@ -17,7 +17,7 @@
   const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
   const done = (tx) => new Promise((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error('tx aborted')); });
   const strip = (v) => { const o = {}; for (const k in v) if (k[0] !== '_') o[k] = v[k]; return o; };
-  const ITEM_KEYS = ['x', 'y', 'w', 'color', 'text', 'title', 'url', 'ts', 'video', 'image', 'boardId', 'comments', 'col', 'ord', 'from', 'to', 'arrow', 'label', 'hex', 'name', 'rows', 'strokes', 'sh', 'pts', 'size', 'query', 'file', 'collapsed', 'locked', 'h', 'bend', 'todos', 'sum'];
+  const ITEM_KEYS = ['x', 'y', 'w', 'color', 'text', 'title', 'url', 'ts', 'video', 'image', 'boardId', 'comments', 'col', 'ord', 'from', 'to', 'arrow', 'label', 'hex', 'name', 'rows', 'strokes', 'sh', 'pts', 'size', 'query', 'file', 'collapsed', 'locked', 'h', 'bend', 'todos', 'sum', 'node'];
   const TRASH_MS = 30 * 24 * 3600 * 1000; // deleted cards keep their images this long (restorable from the trash)
 
   class Store {
@@ -125,9 +125,9 @@
       o = o || {};
       const id = YVN.uid('b_');
       const now = Date.now();
-      const board = { ...YVN.emptyBoard(id, o.title || 'New Board', parentId), color: o.color || YVN.BOARD_COLORS[5], _dirty: true };
+      const board = { ...YVN.emptyBoard(id, o.title != null ? o.title : 'New Board', parentId), color: o.color || YVN.BOARD_COLORS[5], _dirty: true };
       await this._update(id, () => board);
-      const item = await this.putItem(parentId, { type: 'board', boardId: id, x: o.x || 40, y: o.y || 40, w: YVN.CARD_W.board, createdAt: now });
+      const item = await this.putItem(parentId, { type: 'board', boardId: id, x: o.x || 40, y: o.y || 40, w: o.node ? YVN.CARD_W.node : YVN.CARD_W.board, node: o.node ? true : undefined, createdAt: now });
       this._emit('board:' + id);
       return { board: strip(board), item };
     }

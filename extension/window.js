@@ -47,9 +47,12 @@
     if (m.type === 'addShot' && (!m.tabId || !tabId || m.tabId === tabId)) view.addShot(m.cap);
   });
 
-  // global capture shortcut inside this window too
+  // Alt+S: serial node, Alt+P: parallel node, anywhere in this window
   document.addEventListener('keydown', (e) => {
-    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyS') { e.preventDefault(); view.captureShot(); }
+    if (!e.altKey || e.ctrlKey || e.metaKey || (e.code !== 'KeyS' && e.code !== 'KeyP')) return;
+    if (e.target.closest && e.target.closest('input, textarea, [contenteditable="true"]')) return;
+    e.preventDefault(); e.stopPropagation();
+    view.addNode(e.code === 'KeyS' ? 'serial' : 'parallel');
   }, true);
 
   // pick up changes from other devices while this window is on screen
