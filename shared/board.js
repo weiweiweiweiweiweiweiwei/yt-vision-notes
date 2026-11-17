@@ -75,6 +75,7 @@
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     unlock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+    tidy: '<path d="M3 4h18"/><rect x="3" y="7" width="5" height="10" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="16" y="7" width="5" height="7" rx="1"/>',
     node: '<rect x="5" y="6" width="14" height="12" rx="2"/><path d="M5 14h14M2 10l2 2-2 2M20 10h2v4h-2"/>',
     pdf: '<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/><rect x="3" y="11" width="9" height="5" rx="1" fill="#e5484d" stroke="none"/>',
     png: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m4 19 6-6 4 4 2-2 4 4" stroke="#30a46c"/><circle cx="16" cy="9" r="2" fill="#f5a524" stroke="#f5a524"/>',
@@ -165,13 +166,14 @@
         upload_image: ['image', 'Image', 'Add an image (or paste / drop one)'],
         upload: ['upload', 'Upload', 'Upload any file (PDF, audio, video…)'],
         draw: ['draw', 'Draw', 'Draw freehand on the board'],
+        tidy: ['tidy', 'Tidy nodes', 'Line up the nodes: tops aligned, even spacing'],
         node: ['node', 'Node (Alt+S)', 'Node: Alt+S adds one after the selected node, Alt+P a parallel one'],
       };
       // No tool bar (YouTube panel, pop-out window and website alike): right-click empty board space opens the
       // tool wheel at the pointer, right-click again flips between its two panels; every other tool is in the header's ⋯ menu.
       const layout = this._wheelLayout();
       const onWheel = new Set([layout.center, ...layout.panels.flat()]);
-      const rest = ['node', 'summary', 'ai', 'shot', 'note', 'link', 'todo', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'color',
+      const rest = ['tidy', 'node', 'summary', 'ai', 'shot', 'note', 'link', 'todo', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'color',
         'heading', 'video', 'map', 'audio', 'doc', 'upload_image', 'upload', 'draw']
         .filter((k) => !onWheel.has(k) && (k !== 'summary' || this.o.capture) && (k !== 'shot' || this.o.capture) && (k !== 'ai' || this.o.aiGenerate));
       const more = el('button', { class: 'yb-hbtn', title: 'More tools', 'aria-label': 'More tools', onclick: (e) => this._menuAt(e.currentTarget, [
@@ -234,11 +236,11 @@
     }
 
     // ---------- right-click tool wheel ----------
-    /** Which tools sit where. With a video (capture) the centre is the pin; on the website it is Image. */
+    /** Which tools sit where. With a video (capture) the centre is the pin; on the website it is Tidy nodes. */
     _wheelLayout() {
       const cap = !!this.o.capture;
       return {
-        center: cap ? 'shot' : 'upload_image',
+        center: cap ? 'shot' : 'tidy',
         panels: [
           ['link', 'heading', 'line', 'board', 'column', 'comment'],
           ['table', 'sketch', this.o.aiGenerate ? 'ai' : cap ? 'upload_image' : 'upload', 'todo', 'draw', 'color'],
@@ -678,6 +680,12 @@
      * go left to right, then top to bottom.
      */
     _numberNodes(live) {
+      const out = new Map();
+      for (const ch of this._nodeChains(live).chains) ch.order.forEach((n, k) => out.set(n.id, String(k + 1).padStart(2, '0')));
+      return out;
+    }
+    /** The board's nodes split into connected chains, each in link order (see _numberNodes). */
+    _nodeChains(live) {
       const nodes = live.filter(isNodeItem);
       const byId = new Map(nodes.map((n) => [n.id, n]));
       const links = live.filter((l) => l.type === 'line' && l.node && l.from && l.to && byId.has(l.from.id) && byId.has(l.to.id) && l.from.id !== l.to.id);
@@ -687,7 +695,7 @@
       const groups = new Map();
       for (const n of nodes) { const g = find(n.id); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(n); }
       const pos = (a, b) => a.x - b.x || a.y - b.y;
-      const out = new Map();
+      const chains = [];
       for (const grp of groups.values()) {
         const indeg = new Map(grp.map((n) => [n.id, 0]));
         for (const l of links) if (indeg.has(l.to.id)) indeg.set(l.to.id, indeg.get(l.to.id) + 1);
@@ -700,9 +708,52 @@
           for (const l of links) if (l.from.id === n.id && indeg.has(l.to.id)) { indeg.set(l.to.id, indeg.get(l.to.id) - 1); if (!indeg.get(l.to.id)) ready.push(byId.get(l.to.id)); }
         }
         for (const n of grp.filter((m) => !order.includes(m)).sort(pos)) order.push(n); // loops
-        order.forEach((n, k) => out.set(n.id, String(k + 1).padStart(2, '0')));
+        chains.push({ order });
       }
-      return out;
+      return { links, chains };
+    }
+    /**
+     * Tidy the nodes (the chains of the selected nodes, or all of them): each chain is laid out in link order with
+     * the same gap between steps, tops aligned; parallel branches stack below each other with the same gap.
+     * Chains whose nodes have top / bottom ports run downwards instead. One Ctrl+Z undoes it.
+     */
+    async tidyNodes() {
+      if (!this.board) return;
+      if (this.editing) await this.commitEdit();
+      const live = YVN.liveItems(this.board);
+      const { links, chains } = this._nodeChains(live);
+      const picked = new Set([...this.sel]);
+      const todo = chains.filter((ch) => ch.order.length > 1 && (![...picked].some((id) => live.some((i) => i.id === id && isNodeItem(i))) || ch.order.some((n) => picked.has(n.id))));
+      if (!todo.length) { this.toast('No linked nodes to tidy'); return; }
+      const GAP = 70; // between steps (the green ports sit in this space)
+      const labelH = (n) => (n.type === 'board' ? 24 : 50); // room for the name / number above a node
+      const patches = [];
+      for (const { order } of todo) {
+        const vert = order[0].type !== 'board' && order[0].nport === 'v';
+        const ids = new Set(order.map((n) => n.id));
+        // step of each node = longest run of links leading to it (links going back in a loop are ignored)
+        const idx = new Map(order.map((n, k) => [n.id, k]));
+        const depth = new Map(order.map((n) => [n.id, 0]));
+        for (const n of order) for (const l of links) if (l.from.id === n.id && ids.has(l.to.id) && idx.get(l.to.id) > idx.get(n.id)) depth.set(l.to.id, Math.max(depth.get(l.to.id), depth.get(n.id) + 1));
+        const steps = [];
+        for (const n of order) { const d = depth.get(n.id); (steps[d] = steps[d] || []).push(n); }
+        const size = new Map(order.map((n) => [n.id, this._rectOf(n)]));
+        const ax = Math.min(...order.map((n) => n.x)), ay = Math.min(...order.map((n) => n.y - labelH(n))); // top of the highest name
+        let main = vert ? ay : ax;
+        for (const step of steps.filter(Boolean)) {
+          step.sort((a, b) => (vert ? a.x - b.x || a.y - b.y : a.y - b.y || a.x - b.x));
+          let cross = vert ? ax : ay;
+          let extent = 0;
+          for (const n of step) {
+            const r = size.get(n.id), lh = labelH(n);
+            if (vert) { patches.push({ id: n.id, x: Math.round(cross), y: Math.round(main + lh) }); cross += r.w + GAP; extent = Math.max(extent, lh + r.h); }
+            else { patches.push({ id: n.id, x: Math.round(main), y: Math.round(cross + lh) }); cross += lh + r.h + GAP / 2; extent = Math.max(extent, r.w); }
+          }
+          main += extent + GAP;
+        }
+      }
+      await this.m.patchItems(this.boardId, patches);
+      await this.reload();
     }
     /** Green input (left / top) and output (right / bottom) of a node. 01 (the start of a chain) shows no input dot, but a link can still be dropped on it. */
     _ports(c, it) {
@@ -1786,6 +1837,7 @@
       if (act === 'todo') return this._addSimple({ type: 'todo', todos: [] });
       if (act === 'board') return this._addBoard();
       if (act === 'node') return this.addNode('serial', this._dropAt || null);
+      if (act === 'tidy') return this.tidyNodes();
       if (act === 'link') return this._addLink('');
       if (act === 'column') return this._addColumn();
       if (act === 'color') return this._addColor();
