@@ -59,7 +59,7 @@
     column: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h8"/>',
     table: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M3 15h18M9 5v14M15 5v14"/>',
     sketch: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15c2-4 3 1 5-2s3-3 5 0"/>',
-    heading: '<path d="M6 5h12M12 5v14M9 19h6"/>',
+    heading: '<text x="12" y="18.5" text-anchor="middle" font-family="Georgia, \'Times New Roman\', serif" font-size="19" font-weight="700" fill="currentColor" stroke="none">H</text>',
     video: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/>',
     map: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
     audio: '<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/>',
@@ -666,7 +666,7 @@
       if (nc) c.append(el('button', { class: 'yb-cbadge', title: `${nc} ${nc === 1 ? 'comment' : 'comments'}`, dataset: { act: 'comments' } }, icon('comment', 13), String(nc)));
       if (it.locked) { c.classList.add('yb-locked'); c.append(el('span', { class: 'yb-lockbadge', title: 'Position locked' }, icon('lock', 12))); }
       if (it.nmode && (it.type === 'note' || it.type === 'column')) {
-        c.classList.add('yb-nm', it.nport === 'v' ? 'yb-pv' : 'yb-ph');
+        c.classList.add('yb-nm', it.nport === 'v' ? 'yb-nm-v' : 'yb-nm-h');
         c.append(el('div', { class: 'yb-nmlabel', title: 'Double-click to edit', style: it.ncolor ? 'color:' + it.ncolor : '' }, it.nlabel != null ? it.nlabel : this._nodeNum.get(it.id) || ''));
         this._ports(c, it);
       }
@@ -675,8 +675,11 @@
     }
     /** Green input (left / top) and output (right / bottom) of a node. The first node (01) has no input. */
     _ports(c, it) {
-      if (this._nodeNum.get(it.id) !== '01') c.append(el('span', { class: 'yb-port yb-pin', dataset: { port: 'in' }, title: 'Input: drag to a node to connect' }));
-      c.append(el('span', { class: 'yb-port yb-pout', dataset: { port: 'out' }, title: 'Output: drag to a node to connect' }));
+      const v = it.type !== 'board' && it.nport === 'v';
+      const shape = (inner) => '<svg viewBox="0 0 14 14" width="14" height="14">' + inner + '</svg>';
+      const tri = v ? '<polygon points="1.5,2 12.5,2 7,12.5"/>' : '<polygon points="2,1.5 12.5,7 2,12.5"/>';
+      if (this._nodeNum.get(it.id) !== '01') c.append(el('span', { class: 'yb-port yb-pin', dataset: { port: 'in' }, title: 'Input: drag to a node to connect', html: shape(tri) }));
+      c.append(el('span', { class: 'yb-port yb-pout', dataset: { port: 'out' }, title: 'Output: drag to a node to connect', html: shape('<rect x="2" y="2" width="10" height="10" rx="1"/>') }));
     }
     _md(text, ph) {
       if (!text) return el('div', { class: 'yb-md yb-ph' }, ph || '');
@@ -997,9 +1000,15 @@
         } else if (!(hit && hit.closest && hit.closest('.yb-item'))) {
           // dropped on empty board: a new node there, already connected
           const p = this._toBoard(e.clientX, e.clientY);
-          const at = { x: snap(p.x - (gst.port === 'out' ? 10 : YVN.CARD_W.node - 10)), y: snap(p.y - 32) };
+          const src = this.board.items.find((i) => i.id === gst.id);
+          const w = src && src.type !== 'board' ? src.w || YVN.CARD_W[src.type] : YVN.CARD_W.node;
+          const vert = src && src.type !== 'board' && src.nport === 'v';
+          // put the new node's matching port under the pointer
+          const at = vert
+            ? { x: snap(p.x - w / 2), y: snap(gst.port === 'out' ? p.y + 10 : p.y - 120) }
+            : { x: snap(p.x - (gst.port === 'out' ? 10 : w - 10)), y: snap(p.y - 32) };
           const before = await this._snap([this.boardId]);
-          const { item } = await this.api.createBoard(this.boardId, { ...at, title: '', color: '#8b8d98', node: true });
+          const item = await this._newNodeLike(src, at);
           await this._putLink(gst.port === 'out' ? gst.id : item.id, gst.port === 'out' ? item.id : gst.id);
           await this._pushHistory([this.boardId], before);
           await this.reload();
@@ -1821,9 +1830,7 @@
       const before = await this._snap([this.boardId]);
       if (shift.size) await this.api.patchItems(this.boardId, nodes.filter((n) => shift.has(n.id)).map((n) => ({ id: n.id, x: n.x + along.x, y: n.y + along.y })));
       const xy = { x: Math.round(pos.x), y: Math.round(pos.y) };
-      const item = !cur || cur.type === 'board'
-        ? (await this.api.createBoard(this.boardId, { ...xy, title: '', color: '#8b8d98', node: true })).item
-        : await this.api.putItem(this.boardId, { type: cur.type, ...xy, w: cur.w || YVN.CARD_W[cur.type], nmode: true, nport: cur.nport || 'h', ncolor: cur.ncolor, ...(cur.type === 'note' ? { text: '' } : { title: '' }) });
+      const item = await this._newNodeLike(cur, xy);
       if (cur && kind === 'serial') {
         const outs = links.filter((l) => l.from.id === cur.id);
         if (outs.length) await this.api.patchItems(this.boardId, outs.map((l) => ({ id: l.id, from: { id: item.id, port: 'out' } })));
@@ -1836,6 +1843,11 @@
       await this.reload();
       this.sel = new Set([item.id]); this._paintSel();
       return item;
+    }
+    /** A new node of the same kind as src (node card, or note / column in node mode with the same port direction). */
+    async _newNodeLike(src, xy) {
+      if (!src || src.type === 'board') return (await this.api.createBoard(this.boardId, { ...xy, title: '', color: '#8b8d98', node: true })).item;
+      return this.api.putItem(this.boardId, { type: src.type, ...xy, w: src.w || YVN.CARD_W[src.type], nmode: true, nport: src.nport || 'h', ncolor: src.ncolor, ...(src.type === 'note' ? { text: '' } : { title: '' }) });
     }
     _putLink(a, b) {
       return this.api.putItem(this.boardId, { type: 'line', node: true, from: { id: a, port: 'out' }, to: { id: b, port: 'in' }, arrow: 'none', color: null, label: '' });

@@ -435,21 +435,20 @@ button.yb-playbadge:hover { background: #e5484d; transform: translate(-50%, -50%
 .yb-nbar { height: 24px; display: flex; align-items: center; padding: 0 4px; border-top: 2px solid #8e9198; margin-top: 4px; font-size: 13px; color: #e4e4e7; font-variant-numeric: tabular-nums; }
 .yb-node.yb-sel .yb-nbody { border-color: #e5484d; box-shadow: 0 0 0 1px #e5484d, 0 2px 8px rgba(0, 0, 0, .35); }
 .yb-port { position: absolute; top: 24px; width: 20px; height: 20px; cursor: crosshair; z-index: 2; }
-.yb-port::before { content: ""; position: absolute; left: 5px; top: 5px; width: 10px; height: 10px; background: #3fb950; transition: transform .12s, background .12s; }
+.yb-port svg { position: absolute; left: 3px; top: 3px; display: block; overflow: visible; transition: transform .12s; }
+.yb-port svg polygon, .yb-port svg rect { fill: #3fb950; stroke: #232428; stroke-width: 1.6; stroke-linejoin: round; }
 .yb-pin { left: -21px; }
-.yb-pin::before { clip-path: polygon(0 0, 100% 50%, 0 100%); }
 .yb-pout { right: -21px; }
-.yb-pout::before { border-radius: 1px; }
-.yb-port:hover::before { background: #6ee07f; transform: scale(1.25); }
+.yb-port:hover svg { transform: scale(1.25); }
+.yb-port:hover svg polygon, .yb-port:hover svg rect { fill: #6ee07f; }
 .yb-lines .yb-nlink .yb-vis { stroke: #a5a7ad !important; stroke-width: 2; }
 .yb-lines .yb-nlink.yb-lsel .yb-vis { stroke: #e5484d !important; }
 
 /* notes and columns in node mode: name / number above, green ports at the sides or top / bottom */
 .yb-item.yb-nm { overflow: visible; }
-.yb-nmlabel { position: absolute; left: 0; bottom: 100%; margin-bottom: 6px; max-width: 100%; min-height: 8px; font-size: 34px; font-weight: 800; line-height: 1.1; color: var(--yb-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
+.yb-nmlabel { position: absolute; left: 0; bottom: 100%; margin-bottom: 6px; max-width: 100%; min-height: 8px; font-size: 34px; font-weight: 800; line-height: 1.1; padding-right: 6px; color: var(--yb-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
 .yb-nminput { width: 260px; max-width: 70vw; padding: 0; border: 0; outline: 1px dashed var(--yb-line); background: transparent; color: inherit; font: inherit; }
-.yb-nm.yb-ph .yb-port { top: calc(50% - 10px); }
-.yb-nm.yb-pv .yb-port { left: calc(50% - 10px); right: auto; }
-.yb-nm.yb-pv .yb-pin { top: -21px; }
-.yb-nm.yb-pv .yb-pin::before { clip-path: polygon(0 0, 100% 0, 50% 100%); }
-.yb-nm.yb-pv .yb-pout { top: auto; bottom: -21px; }
+.yb-nm.yb-nm-h .yb-port { top: calc(50% - 10px); }
+.yb-nm.yb-nm-v .yb-port { left: calc(50% - 10px); right: auto; }
+.yb-nm.yb-nm-v .yb-pin { top: -21px; }
+.yb-nm.yb-nm-v .yb-pout { top: auto; bottom: -21px; }
