@@ -443,3 +443,13 @@ button.yb-playbadge:hover { background: #e5484d; transform: translate(-50%, -50%
 .yb-port:hover::before { background: #6ee07f; transform: scale(1.25); }
 .yb-lines .yb-nlink .yb-vis { stroke: #a5a7ad !important; stroke-width: 2; }
 .yb-lines .yb-nlink.yb-lsel .yb-vis { stroke: #e5484d !important; }
+
+/* notes and columns in node mode: name / number above, green ports at the sides or top / bottom */
+.yb-item.yb-nm { overflow: visible; }
+.yb-nmlabel { position: absolute; left: 0; bottom: 100%; margin-bottom: 6px; max-width: 100%; min-height: 8px; font-size: 34px; font-weight: 800; line-height: 1.1; color: var(--yb-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
+.yb-nminput { width: 260px; max-width: 70vw; padding: 0; border: 0; outline: 1px dashed var(--yb-line); background: transparent; color: inherit; font: inherit; }
+.yb-nm.yb-ph .yb-port { top: calc(50% - 10px); }
+.yb-nm.yb-pv .yb-port { left: calc(50% - 10px); right: auto; }
+.yb-nm.yb-pv .yb-pin { top: -21px; }
+.yb-nm.yb-pv .yb-pin::before { clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.yb-nm.yb-pv .yb-pout { top: auto; bottom: -21px; }

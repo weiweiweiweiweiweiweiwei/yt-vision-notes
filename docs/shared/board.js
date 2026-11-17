@@ -84,6 +84,7 @@
   const host = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return url; } };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const snap = (v) => Math.round(v / 10) * 10;
+  const isNodeItem = (i) => !!i && ((i.type === 'board' && i.node) || (!!i.nmode && (i.type === 'note' || i.type === 'column')));
   const FREE_H = new Set(['todo', 'note', 'comment', 'table', 'doc', 'column', 'link', 'file', 'audio', 'heading', 'color']);
 
   class BoardView {
@@ -494,13 +495,13 @@
       const keep = new Set();
       const kids = new Map();
       // nodes are numbered 01, 02… from left to right (top to bottom for the same x)
-      this._nodeNum = new Map(live.filter((i) => i.type === 'board' && i.node).sort((a, b) => a.x - b.x || a.y - b.y).map((n, k) => [n.id, String(k + 1).padStart(2, '0')]));
+      this._nodeNum = new Map(live.filter(isNodeItem).sort((a, b) => a.x - b.x || a.y - b.y).map((n, k) => [n.id, String(k + 1).padStart(2, '0')]));
       for (const it of live) {
         if (it.type === 'line' || it.type === 'ink') { keep.add(it.id); continue; }
         keep.add(it.id);
         let e = this.els.get(it.id);
         const s = it.type === 'board' ? this.sums[it.boardId] || {} : {};
-        const sig = [it.updatedAt, it.locked, it.collapsed, it.type === 'board' ? [s.title, s.color, s.itemCount, this._nodeNum.get(it.id)] : '', it.image && it.image.editedAt, (it.comments || []).length].join('|');
+        const sig = [it.updatedAt, it.locked, it.collapsed, it.type === 'board' ? [s.title, s.color, s.itemCount, this._nodeNum.get(it.id)] : '', it.image && it.image.editedAt, (it.comments || []).length, this._nodeNum.get(it.id) || ''].join('|');
         if (!e || (e._sig !== sig && this.editing !== it.id)) {
           const fresh = this._card(it);
           fresh._sig = sig;
@@ -578,9 +579,8 @@
         c.append(el('div', { class: 'yb-nlabel' }, s.title || ''),
           el('div', { class: 'yb-nbody' },
             el('div', { class: 'yb-nthumb' }, icon('image', 20)),
-            el('div', { class: 'yb-nbar' }, el('span', { class: 'yb-nnum' }, this._nodeNum.get(it.id) || ''))),
-          el('span', { class: 'yb-port yb-pin', dataset: { port: 'in' }, title: 'Input: drag to a node to connect' }),
-          el('span', { class: 'yb-port yb-pout', dataset: { port: 'out' }, title: 'Output: drag to a node to connect' }));
+            el('div', { class: 'yb-nbar' }, el('span', { class: 'yb-nnum' }, this._nodeNum.get(it.id) || ''))));
+        this._ports(c, it);
       } else if (it.type === 'board') {
         const s = this.sums[it.boardId] || {};
         c.append(el('div', { class: 'yb-bicon', style: `background:${s.color || '#8b8d98'}` }, el('i'), el('i'), el('i'), el('i')),
@@ -665,8 +665,18 @@
       const nc = it.type === 'comment' ? 0 : (it.comments || []).length;
       if (nc) c.append(el('button', { class: 'yb-cbadge', title: `${nc} ${nc === 1 ? 'comment' : 'comments'}`, dataset: { act: 'comments' } }, icon('comment', 13), String(nc)));
       if (it.locked) { c.classList.add('yb-locked'); c.append(el('span', { class: 'yb-lockbadge', title: 'Position locked' }, icon('lock', 12))); }
+      if (it.nmode && (it.type === 'note' || it.type === 'column')) {
+        c.classList.add('yb-nm', it.nport === 'v' ? 'yb-pv' : 'yb-ph');
+        c.append(el('div', { class: 'yb-nmlabel', title: 'Double-click to edit', style: it.ncolor ? 'color:' + it.ncolor : '' }, it.nlabel != null ? it.nlabel : this._nodeNum.get(it.id) || ''));
+        this._ports(c, it);
+      }
       if (it.type !== 'board') c.append(el('div', { class: 'yb-rs' + (FREE_H.has(it.type) ? ' yb-rs2' : ''), title: 'Drag to resize' }));
       return c;
+    }
+    /** Green input (left / top) and output (right / bottom) of a node. The first node (01) has no input. */
+    _ports(c, it) {
+      if (this._nodeNum.get(it.id) !== '01') c.append(el('span', { class: 'yb-port yb-pin', dataset: { port: 'in' }, title: 'Input: drag to a node to connect' }));
+      c.append(el('span', { class: 'yb-port yb-pout', dataset: { port: 'out' }, title: 'Output: drag to a node to connect' }));
     }
     _md(text, ph) {
       if (!text) return el('div', { class: 'yb-md yb-ph' }, ph || '');
@@ -968,6 +978,7 @@
       if (gst.kind === 'line-move') {
         const ln = this.board.items.find((i) => i.id === gst.id);
         if (!gst.moved || !ln) return;
+        if (ln.node) { await this.m.deleteItems(this.boardId, [ln.id]); return this.reload(); } // dragging a node link cuts it
         // the whole line moves; ends that were attached to cards become free points at their new place
         const G = this._lineGeom(this._endBox(ln.from), this._endBox(ln.to), ln.bend);
         const ddx = (e.clientX - gst.start.x) / this.view.z, ddy = (e.clientY - gst.start.y) / this.view.z;
@@ -978,12 +989,12 @@
       if (gst.kind === 'line-link') {
         if (!gst.moved) { this._renderLines(); return; }
         const hit = document.elementFromPoint(e.clientX, e.clientY);
-        const card = hit && hit.closest && hit.closest('.yb-node');
+        const card = hit && hit.closest && hit.closest('.yb-node, .yb-nm');
         const other = card && card.dataset.id !== gst.id ? card.dataset.id : null;
         if (other) {
           const [a, b] = gst.port === 'out' ? [gst.id, other] : [other, gst.id];
           await this._linkNodes(a, b);
-        } else if (!card) {
+        } else if (!(hit && hit.closest && hit.closest('.yb-item'))) {
           // dropped on empty board: a new node there, already connected
           const p = this._toBoard(e.clientX, e.clientY);
           const at = { x: snap(p.x - (gst.port === 'out' ? 10 : YVN.CARD_W.node - 10)), y: snap(p.y - 32) };
@@ -1172,6 +1183,7 @@
       if (hmid) { this.m.patchItems(this.boardId, [{ id: hmid.dataset.line, bend: null }]).then(() => this.reload()); return; }
       const lineEl = t.closest('.yb-line, .yb-llabel');
       if (lineEl) return this._editLineLabel(lineEl.dataset.id);
+      if (t.closest('.yb-nmlabel')) return this._renameNodeLabel(t.closest('.yb-item')._item);
       if (t.closest('.yb-colhead')) return this._renameColumn(t.closest('.yb-item')._item);
       const card = t.closest('.yb-item');
       if (card && card._item && card._item.type === 'column') return;
@@ -1222,8 +1234,6 @@
       for (const id of ids) if ((live.find((i) => i.id === id) || {}).type === 'column') for (const k of live) if (k.col === id) all.add(k.id);
       for (const ln of live) if (ln.type === 'line' && ((ln.from && all.has(ln.from.id)) || (ln.to && all.has(ln.to.id)))) all.add(ln.id);
       ids = [...all];
-      const boards = ids.map((id) => this.board.items.find((i) => i.id === id)).filter((i) => i && i.type === 'board');
-      if (boards.length && !confirm(`Deleting ${boards.map((b) => '"' + this._title(b.boardId) + '"').join(', ')} also deletes every card inside. Continue?`)) return;
       await this.m.deleteItems(this.boardId, ids, opts);
       this.sel.clear();
       this.reload();
@@ -1266,10 +1276,11 @@
       };
       if (!multi && it.type === 'column') {
         // columns: only what's needed (rename by double-clicking the title, delete with the Delete key)
-        return this._menuAt(anchor, [lockEntry, { label: 'Draw line from this card', icon: 'line', run: () => this._startLineFrom(it.id) }, colorEntry, { sep: true }, delEntry]);
+        return this._menuAt(anchor, [lockEntry, { label: 'Draw line from this card', icon: 'line', run: () => this._startLineFrom(it.id) }, colorEntry, { sep: true }, ...this._nodeModeEntries(it), { sep: true }, delEntry]);
       }
       if (!multi) {
         if (it.type === 'board') entries.push({ label: 'Open', icon: 'board', run: () => this.open(it.boardId) }, { label: 'Rename', icon: 'heading', run: () => this._renameCard(it) });
+        if (it.type === 'note') entries.push(...this._nodeModeEntries(it), { sep: true });
         if (it.type === 'todo') entries.push(it.title ? { label: 'Remove title', icon: 'heading', run: async () => { await this.m.patchItems(this.boardId, [{ id: it.id, title: null }]); this.reload(); } } : { label: 'Add title', icon: 'heading', run: () => this.startEdit(it.id, { addTitle: true }) });
         if (it.type === 'map' && it.query) entries.push({ label: 'Change place', icon: 'map', run: () => this.startEdit(it.id) });
         if (it.type === 'shot' || it.type === 'image') entries.push({ label: 'Open annotation editor', icon: 'image', run: () => this.openEditor(it.id) });
@@ -1287,6 +1298,42 @@
       if (boardsHere.length) entries.push({ label: 'Move to board…', icon: 'board', run: () => this._menuAt(anchor, boardsHere.map((b) => ({ label: this._title(b.boardId), icon: 'board', run: () => this._moveInto(ids, b.boardId) }))) });
       entries.push({ sep: true }, lockEntry, colorEntry, { sep: true }, delEntry);
       this._menuAt(anchor, entries);
+    }
+
+    /** Right-click entries for a note or column: switch node mode on, or pick port direction / rename / label colour. */
+    _nodeModeEntries(it) {
+      const set = async (patch) => { await this.m.patchItems(this.boardId, [{ id: it.id, ...patch }]); this.reload(); };
+      if (!it.nmode) return [{ label: 'Node mode', icon: 'node', run: () => set({ nmode: true, nport: it.nport || 'h' }) }];
+      return [
+        { label: (it.nport === 'v' ? '' : '✓ ') + 'Ports left / right', icon: 'node', run: () => set({ nport: 'h' }) },
+        { label: (it.nport === 'v' ? '✓ ' : '') + 'Ports top / bottom', icon: 'node', run: () => set({ nport: 'v' }) },
+        { label: 'Rename', icon: 'heading', run: () => this._renameNodeLabel(it) },
+        it.nlabel != null && { label: 'Show number again', icon: 'heading', run: () => set({ nlabel: null }) },
+        { heading: 'Name colour' },
+        { colors: [null, '#f1f1f3', ...YVN.BOARD_COLORS], pick: (c) => set({ ncolor: c }) },
+        { label: 'Leave node mode', icon: 'close', run: async () => {
+          const ids = YVN.liveItems(this.board).filter((l) => l.type === 'line' && l.node && ((l.from && l.from.id === it.id) || (l.to && l.to.id === it.id))).map((l) => l.id);
+          if (ids.length) await this.m.deleteItems(this.boardId, ids);
+          set({ nmode: false });
+        } },
+      ];
+    }
+    /** Edit the name / number above a node-mode note or column in place; an empty name is allowed. */
+    _renameNodeLabel(it) {
+      const c = it && this.els.get(it.id), lab = c && c.querySelector('.yb-nmlabel');
+      if (!lab) return;
+      const old = lab.textContent;
+      const inp = el('input', { class: 'yb-nminput', value: old, 'aria-label': 'Node name' });
+      lab.replaceChildren(inp); inp.focus(); inp.select();
+      let done = false;
+      const finish = async (save) => {
+        if (done) return; done = true;
+        if (save && inp.value.trim() !== old) await this.m.patchItems(this.boardId, [{ id: it.id, nlabel: inp.value.trim() }]);
+        c._sig = null; this.reload();
+      };
+      inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+      inp.addEventListener('blur', () => finish(true));
+      inp.addEventListener('pointerdown', (e) => e.stopPropagation());
     }
 
     // ---------- inline editing ----------
@@ -1747,29 +1794,36 @@
       if (!this.board) return null;
       if (this.editing) await this.commitEdit();
       const live = YVN.liveItems(this.board);
-      const isNode = (i) => i && i.type === 'board' && i.node;
-      const nodes = live.filter(isNode);
+      const nodes = live.filter(isNodeItem);
       const links = live.filter((i) => i.type === 'line' && i.node && i.from && i.to && i.from.id && i.to.id);
-      let cur = at ? null : [...this.sel].map((id) => live.find((i) => i.id === id)).find(isNode) || null;
-      if (!cur && !at && nodes.length) cur = nodes.reduce((a, b) => (b.x > a.x || (b.x === a.x && b.y > a.y) ? b : a));
-      const NW = YVN.CARD_W.node, NH = 92, GX = 70, GY = 60;
-      const busy = (p, skip) => nodes.some((n) => !skip.has(n.id) && Math.abs(n.x - p.x) < NW && Math.abs(n.y - p.y) < NH);
+      let cur = at ? null : [...this.sel].map((id) => live.find((i) => i.id === id)).find(isNodeItem) || null;
+      if (!cur && !at && nodes.length) cur = nodes.reduce((p, n) => (n.x > p.x || (n.x === p.x && n.y > p.y) ? n : p));
+      const box = (n) => this._rectOf(n);
+      const cb = cur ? box(cur) : { w: YVN.CARD_W.node, h: 92 };
+      const vert = !!cur && cur.type !== 'board' && cur.nport === 'v';
+      const label = cur && cur.type !== 'board' ? 56 : 30; // room for the name / number above a node
+      const along = vert ? { x: 0, y: cb.h + label + 50 } : { x: cb.w + 70, y: 0 }; // serial direction
+      const across = vert ? { x: cb.w + 70, y: 0 } : { x: 0, y: cb.h + label + 40 }; // parallel direction
+      const hits = (p, n) => { const r = box(n); return p.x < n.x + r.w && p.x + cb.w > n.x && p.y < n.y + r.h && p.y + cb.h > n.y; };
       let pos, shift = new Set();
       if (at) pos = at;
-      else if (!cur) pos = this._slot(NW, NH);
+      else if (!cur) pos = this._slot(YVN.CARD_W.node, 92);
       else if (kind === 'serial') {
-        pos = { x: cur.x + NW + GX, y: cur.y };
-        // make room: everything downstream of cur, and whatever sits on the new spot, moves one step right
+        pos = { x: cur.x + along.x, y: cur.y + along.y };
+        // make room: everything downstream of cur, and whatever sits on the new spot, moves one step along
         const q = [cur.id];
         while (q.length) { const id = q.shift(); for (const l of links) if (l.from.id === id && l.to.id !== cur.id && !shift.has(l.to.id)) { shift.add(l.to.id); q.push(l.to.id); } }
-        for (const n of nodes) if (n.id !== cur.id && n.x >= pos.x - NW / 2 && Math.abs(n.y - pos.y) < NH) shift.add(n.id);
+        for (const n of nodes) if (n.id !== cur.id && hits(pos, n)) shift.add(n.id);
       } else {
-        pos = { x: cur.x, y: cur.y + NH + GY };
-        while (busy(pos, new Set())) pos = { x: pos.x, y: pos.y + NH + GY };
+        pos = { x: cur.x + across.x, y: cur.y + across.y };
+        while (nodes.some((n) => hits(pos, n))) pos = { x: pos.x + across.x, y: pos.y + across.y };
       }
       const before = await this._snap([this.boardId]);
-      if (shift.size) await this.api.patchItems(this.boardId, nodes.filter((n) => shift.has(n.id)).map((n) => ({ id: n.id, x: n.x + NW + GX })));
-      const { item } = await this.api.createBoard(this.boardId, { x: Math.round(pos.x), y: Math.round(pos.y), title: '', color: '#8b8d98', node: true });
+      if (shift.size) await this.api.patchItems(this.boardId, nodes.filter((n) => shift.has(n.id)).map((n) => ({ id: n.id, x: n.x + along.x, y: n.y + along.y })));
+      const xy = { x: Math.round(pos.x), y: Math.round(pos.y) };
+      const item = !cur || cur.type === 'board'
+        ? (await this.api.createBoard(this.boardId, { ...xy, title: '', color: '#8b8d98', node: true })).item
+        : await this.api.putItem(this.boardId, { type: cur.type, ...xy, w: cur.w || YVN.CARD_W[cur.type], nmode: true, nport: cur.nport || 'h', ncolor: cur.ncolor, ...(cur.type === 'note' ? { text: '' } : { title: '' }) });
       if (cur && kind === 'serial') {
         const outs = links.filter((l) => l.from.id === cur.id);
         if (outs.length) await this.api.patchItems(this.boardId, outs.map((l) => ({ id: l.id, from: { id: item.id, port: 'out' } })));
@@ -1788,7 +1842,7 @@
     }
     async _linkNodes(a, b) {
       const dup = YVN.liveItems(this.board).some((l) => l.type === 'line' && l.node && l.from && l.to && l.from.id === a && l.to.id === b);
-      if (a === b || dup) return;
+      if (a === b || dup || this._nodeNum.get(b) === '01') return; // 01 has no input
       await this.m.putItem(this.boardId, { type: 'line', node: true, from: { id: a, port: 'out' }, to: { id: b, port: 'in' }, arrow: 'none', color: null, label: '' });
     }
 
@@ -2459,7 +2513,7 @@
         g.append(mk('path', { d, class: 'yb-vis', style: `stroke:${color}` }));
         if (ln.arrow === 'end' || ln.arrow === 'both') arrow(g, pb, G.ta, color);
         if (ln.arrow === 'both') arrow(g, pa, G.tb, color);
-        if (selected && !preview) {
+        if (selected && !preview && !ln.node) {
           const hr = 4.5 / this.view.z, hit = 9 / this.view.z;
           for (const [x, y, end] of [[pa.x, pa.y, 'from'], [pb.x, pb.y, 'to'], [G.mid.x, G.mid.y, 'mid']]) {
             // invisible larger circle = easy to grab; small solid dot = what you see
