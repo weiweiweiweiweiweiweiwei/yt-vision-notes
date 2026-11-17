@@ -83,7 +83,6 @@
   const host = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return url; } };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const snap = (v) => Math.round(v / 10) * 10;
-  const GRAB = { x: 24, y: 18 }; // where the pointer holds a card dragged out of the toolbar
   const FREE_H = new Set(['todo', 'note', 'comment', 'table', 'doc', 'column', 'link', 'file', 'audio', 'heading', 'color']);
 
   class BoardView {
@@ -165,45 +164,24 @@
         upload: ['upload', 'Upload', 'Upload any file (PDF, audio, video…)'],
         draw: ['draw', 'Draw', 'Draw freehand on the board'],
       };
-      const MAIN = [this.o.capture && 'shot', this.o.capture && 'summary', this.o.aiGenerate && 'ai', 'note', 'link', 'todo', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'color'].filter(Boolean);
-      const MORE = ['heading', 'video', 'map', 'audio', 'doc'];
-      const LOWER = ['upload_image', 'upload', 'draw'];
-      const btn = (act) => {
-        const b = el('button', { class: 'yb-tool' + (act === 'shot' ? ' yb-primary' : ''), dataset: { tool: act }, onclick: () => { if (this._toolDragged) { this._toolDragged = false; return; } this.tool(act); } }, icon(T[act][0], 20), el('span', {}, T[act][1]));
-        this._dragTool(b, act);
-        return b;
-      };
-      let toolbar;
-      if (this.mode === 'panel' || this.mode === 'web') {
-        // YouTube panel and website: no tool bar. Right-click empty board space opens the tool wheel at the pointer
-        // (right-click again flips between its two panels); everything else is in the header's ⋯ menu.
-        const layout = this._wheelLayout();
-        const WHEEL = new Set([layout.center, ...layout.panels.flat()]);
-        const rest = ['summary', 'ai', ...MAIN, ...MORE, ...LOWER].filter((k, i, all) => T[k] && !WHEEL.has(k) && all.indexOf(k) === i && (k !== 'summary' || this.o.capture) && (k !== 'ai' || this.o.aiGenerate));
-        const more = el('button', { class: 'yb-hbtn', title: 'More tools', 'aria-label': 'More tools', onclick: (e) => this._menuAt(e.currentTarget, [
-          { heading: 'Right-click the board for the tool wheel' },
-          ...rest.map((k) => ({ label: T[k][1], icon: T[k][0], run: () => this.tool(k) })),
-          { sep: true },
-          { label: 'Undo (Ctrl+Z)', icon: 'undo', run: () => this.undo() },
-          { label: 'Redo (Ctrl+Y)', icon: 'redo', run: () => this.redo() },
-          { label: 'Trash', icon: 'trash', run: () => this.openTrash() },
-        ]) }, icon('more', 17));
-        this.zoomLbl.after(more);
-        this.wheel = this._buildWheel(T, layout);
-        r.append(this.head, el('div', { class: 'yb-body' }, this.vp), this.wheel);
-      } else {
-        this.flyout = el('div', { class: 'yb-flyout', hidden: true },
-          ...MORE.map((k) => { const b = el('button', { class: 'yb-tool', onclick: () => { if (this._toolDragged) { this._toolDragged = false; return; } this.flyout.hidden = true; this.tool(k); } }, icon(T[k][0], 24), el('span', {}, T[k][1])); this._dragTool(b, k); return b; }));
-        const moreBtn = el('button', { class: 'yb-tool yb-moretool', 'aria-label': 'More tools', onclick: (e) => {
-          const fr = e.currentTarget.getBoundingClientRect(), rr = r.getBoundingClientRect();
-          this.flyout.hidden = !this.flyout.hidden;
-          this.flyout.style.left = fr.right - rr.left + 8 + 'px';
-          this.flyout.style.top = Math.max(8, Math.min(fr.top - rr.top - 60, rr.height - 260)) + 'px';
-        } }, el('span', { class: 'yb-dots' }, icon('more', 20)));
-        toolbar = el('div', { class: 'yb-tools' }, MAIN.map(btn), moreBtn, el('hr', { class: 'yb-tsep' }), LOWER.map(btn),
-          el('button', { class: 'yb-tool yb-trashbtn', onclick: () => this.openTrash() }, icon('trash', 20), el('span', {}, 'Trash')));
-        r.append(this.head, el('div', { class: 'yb-body' }, toolbar, this.vp), this.flyout);
-      }
+      // No tool bar (YouTube panel, pop-out window and website alike): right-click empty board space opens the
+      // tool wheel at the pointer, right-click again flips between its two panels; every other tool is in the header's ⋯ menu.
+      const layout = this._wheelLayout();
+      const onWheel = new Set([layout.center, ...layout.panels.flat()]);
+      const rest = ['summary', 'ai', 'shot', 'note', 'link', 'todo', 'line', 'board', 'column', 'comment', 'table', 'sketch', 'color',
+        'heading', 'video', 'map', 'audio', 'doc', 'upload_image', 'upload', 'draw']
+        .filter((k) => !onWheel.has(k) && (k !== 'summary' || this.o.capture) && (k !== 'shot' || this.o.capture) && (k !== 'ai' || this.o.aiGenerate));
+      const more = el('button', { class: 'yb-hbtn', title: 'More tools', 'aria-label': 'More tools', onclick: (e) => this._menuAt(e.currentTarget, [
+        { heading: 'Right-click the board for the tool wheel' },
+        ...rest.map((k) => ({ label: T[k][1], icon: T[k][0], run: () => this.tool(k) })),
+        { sep: true },
+        { label: 'Undo (Ctrl+Z)', icon: 'undo', run: () => this.undo() },
+        { label: 'Redo (Ctrl+Y)', icon: 'redo', run: () => this.redo() },
+        { label: 'Trash', icon: 'trash', run: () => this.openTrash() },
+      ]) }, icon('more', 17));
+      this.zoomLbl.after(more);
+      this.wheel = this._buildWheel(T, layout);
+      r.append(this.head, el('div', { class: 'yb-body' }, this.vp), this.wheel);
       this.drawBar = this._buildDrawBar();
       r.append(this.drawBar);
       this.cpop = el('div', { class: 'yb-cpop', hidden: true, role: 'dialog' });
@@ -252,7 +230,7 @@
       clearTimeout(this._tt); this._tt = setTimeout(() => { this.toastEl.hidden = true; }, 2600);
     }
 
-    // ---------- right-click tool wheel (YouTube panel and website) ----------
+    // ---------- right-click tool wheel ----------
     /** Which tools sit where. With a video (capture) the centre is the pin; on the website it is Image. */
     _wheelLayout() {
       const cap = !!this.o.capture;
@@ -767,7 +745,6 @@
       }
       document.addEventListener('pointerdown', (e) => {
         if (!this.menu.hidden && !this.menu.contains(e.target)) this._closeMenu();
-        if (this.flyout && !this.flyout.hidden && !this.flyout.contains(e.target) && !(e.target.closest && e.target.closest('.yb-moretool'))) this.flyout.hidden = true;
         if (!this.cpop.hidden && !this.cpop.contains(e.target) && !(e.target.closest && e.target.closest('.yvn-cmt, .yb-cbadge'))) {
           const cp = this._cp;
           this._closeCpop();
@@ -1651,94 +1628,6 @@
     _after() {
       return this._cards().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).pop() || null;
     }
-    /** Press a toolbar button and drag it onto the board to create the card where it is dropped. */
-    _dragTool(btn, act) {
-      if (['draw', 'upload', 'upload_image', 'audio', 'ai'].includes(act)) return; // these start a mode, a dialog or a file picker
-      btn.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0) return;
-        const sx = e.clientX, sy = e.clientY;
-        let ghost = null;
-        const mv = (ev) => {
-          if (!ghost && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
-          if (!ghost) {
-            // the ghost is the real card in its starting state, at the board's zoom
-            ghost = this._toolPreview(act) || el('div', { class: 'yb-toolghost' }, btn.querySelector('.yb-ic').cloneNode(true), el('span', {}, btn.textContent));
-            this.root.append(ghost);
-            if (this.flyout) this.flyout.hidden = true;
-          }
-          const rr = this.root.getBoundingClientRect();
-          ghost.style.left = ev.clientX - rr.left - GRAB.x + 'px'; ghost.style.top = ev.clientY - rr.top - GRAB.y + 'px';
-          const r = this.vp.getBoundingClientRect();
-          ghost.classList.toggle('yb-over', ev.clientX > r.left && ev.clientX < r.right && ev.clientY > r.top && ev.clientY < r.bottom);
-        };
-        const up = (ev) => {
-          window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
-          if (!ghost) return;
-          ghost.remove();
-          this._toolDragged = true;
-          setTimeout(() => { this._toolDragged = false; }, 0);
-          const r = this.vp.getBoundingClientRect();
-          if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return;
-          // drop exactly where the preview was
-          const pt = this._toBoard(ev.clientX - GRAB.x, ev.clientY - GRAB.y);
-          this._dropAt = { x: Math.round(pt.x), y: Math.round(pt.y) };
-          this.tool(act).finally(() => { this._dropAt = null; });
-        };
-        window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
-      });
-    }
-
-    /** A non-interactive copy of the card a tool creates, used while dragging it out of the toolbar. */
-    _toolPreview(act) {
-      const z = this.view.z;
-      if (act === 'line') {
-        const NS = 'http://www.w3.org/2000/svg';
-        const svg = document.createElementNS(NS, 'svg');
-        svg.setAttribute('viewBox', '-8 -8 256 256');
-        svg.setAttribute('width', 256 * z); svg.setAttribute('height', 256 * z);
-        const path = document.createElementNS(NS, 'path');
-        path.setAttribute('d', 'M0,240 L229,11'); path.setAttribute('class', 'yb-vis'); path.setAttribute('style', 'stroke:var(--yb-linec);stroke-width:2.5;fill:none;stroke-linecap:round');
-        const head = document.createElementNS(NS, 'path');
-        head.setAttribute('d', 'M240,0 L222.4,8.2 L231.8,17.6 Z'); head.setAttribute('style', 'fill:var(--yb-linec)');
-        svg.append(path, head);
-        const wrap = el('div', { class: 'yb-preview yb-pline', style: `margin:${-8 * z}px 0 0 ${-8 * z}px` });
-        wrap.append(svg);
-        return wrap;
-      }
-      const P = {
-        note: { type: 'note', text: '' },
-        summary: { type: 'note', text: '', color: '#f5a524' },
-        todo: { type: 'todo', todos: [] },
-        link: { type: 'link', url: '', title: '' },
-        board: { type: 'board', boardId: '__preview' },
-        column: { type: 'column', title: '' },
-        comment: { type: 'comment', comments: [] },
-        table: { type: 'table', rows: [['', '', ''], ['', '', ''], ['', '', '']] },
-        sketch: { type: 'sketch', strokes: [], sh: 225 },
-        color: { type: 'color', hex: (this._nextHex = ['#e5484d', '#f76b15', '#f5a524', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f'][Math.floor(Math.random() * 8)]), name: '' },
-        heading: { type: 'heading', text: '' },
-        video: { type: 'video', url: '' },
-        map: { type: 'map', query: '' },
-        doc: { type: 'doc', title: '', text: '' },
-      }[act];
-      let c;
-      if (act === 'shot') {
-        c = el('div', { class: 'yb-item yb-shot' }, el('div', { class: 'yb-imgwrap', style: 'aspect-ratio:16/9' }));
-        c.style.width = YVN.CARD_W.shot + 'px';
-      } else if (P) {
-        const it = { id: '__preview', x: 0, y: 0, ...P };
-        const keep = this.sums.__preview;
-        this.sums.__preview = { id: '__preview', title: 'New Board', color: YVN.BOARD_COLORS[5], itemCount: 0 };
-        c = this._card(it);
-        if (keep) this.sums.__preview = keep; else delete this.sums.__preview;
-        c.style.width = (YVN.CARD_W[it.type] || 260) + 'px';
-        if (it.type === 'column') { const b = c.querySelector('.yb-colbody'); if (b) b.classList.add('yb-colempty'); const n = c.querySelector('.yb-colcount'); if (n) n.textContent = '0 cards'; }
-      } else return null;
-      c.classList.add('yb-preview');
-      c.style.transform = `scale(${z})`;
-      return c;
-    }
-
     _slot(w, h, at) {
       if (at) return at;
       if (this._dropAt) { const d = this._dropAt; this._dropAt = null; return d; }
@@ -1751,7 +1640,7 @@
       return YVN.findSlot(items, w, h, { after, maxW, left, top, sizeOf: (i) => this._rectOf(i) });
     }
 
-    /** A card made from a tool (toolbar, wheel or drag) stays on the board even if it is left empty. */
+    /** A card made from a tool (wheel or ⋯ menu) stays on the board even if it is left empty. */
     async tool(act) {
       this._keepNew = true;
       try { return await this._tool(act); } finally { this._keepNew = false; }
@@ -2352,9 +2241,8 @@
     // ---------- color swatches ----------
     async _addColor() {
       const palette = ['#e5484d', '#f76b15', '#f5a524', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f'];
-      const nextHex = this._dropAt ? this._nextHex : null; this._nextHex = null; // keep the color shown while dragging
       const p = this._slot(YVN.CARD_W.color, 160);
-      const it = await this.m.putItem(this.boardId, { type: 'color', hex: nextHex || palette[Math.floor(Math.random() * palette.length)], name: '', w: YVN.CARD_W.color, ...p });
+      const it = await this.m.putItem(this.boardId, { type: 'color', hex: palette[Math.floor(Math.random() * palette.length)], name: '', w: YVN.CARD_W.color, ...p });
       await this.reload();
       this.focusItem(it.id, false);
       this._fresh = this._keepNew ? null : it.id;
