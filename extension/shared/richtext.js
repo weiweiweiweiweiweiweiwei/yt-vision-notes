@@ -170,13 +170,17 @@
       });
     }
     _empty() { this.el.classList.toggle('yb-rt-empty', !this.el.textContent.trim() && !this.el.querySelector('li, input, hr')); }
-    focus(atEnd) {
+    /** at: undefined / true = caret at the end, 'start' = caret at the beginning of the text, false = leave it. */
+    focus(at) {
       this.el.focus();
-      if (atEnd !== false) {
-        const r = document.createRange();
-        r.selectNodeContents(this.el); r.collapse(false);
-        const s = getSelection(); s.removeAllRanges(); s.addRange(r);
-      }
+      if (at === false) return;
+      const r = document.createRange();
+      if (at === 'start') {
+        const first = document.createTreeWalker(this.el, NodeFilter.SHOW_TEXT).nextNode();
+        if (first) r.setStart(first, 0); else r.selectNodeContents(this.el);
+        r.collapse(true);
+      } else { r.selectNodeContents(this.el); r.collapse(false); }
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
     }
     getMarkdown() { return blockMd(this.el); }
 

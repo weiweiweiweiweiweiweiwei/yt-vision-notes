@@ -647,8 +647,9 @@
         // Milanote-style document: a page icon, the title and a word count; double-click opens the editor
         const words = YVN.wordCount(it.text || '');
         c.append(el('div', { class: 'yb-docic', 'aria-hidden': 'true', html: DOC_ICON }),
-          el('div', { class: 'yb-doctitle' }, it.title || 'New Document'),
-          el('div', { class: 'yb-docwc' }, words + (words === 1 ? ' word' : ' words')));
+          el('div', { class: 'yb-doctext' },
+            el('div', { class: 'yb-doctitle' }, it.title || 'New Document'),
+            el('div', { class: 'yb-docwc' }, words + (words === 1 ? ' word' : ' words'))));
       } else if (it.type === 'comment') {
         const thread = el('div', { class: 'yb-thread' });
         for (const cm of it.comments || []) thread.append(this._commentLine(cm));
@@ -2258,8 +2259,8 @@
     // ---------- document (full-screen editor) ----------
     _docEdit(it) {
       const comments = new Map((it.comments || []).map((cm) => [cm.id, { ...cm }]));
-      const title = el('input', { class: 'yb-doctitle-in', placeholder: 'New Document', 'aria-label': 'Document title' });
-      title.value = it.title || '';
+      const title = el('input', { class: 'yb-doctitle-in', 'aria-label': 'Document title' });
+      title.value = it.title || 'New Document';
       const ed = new YVN.RichEditor(it.text || '', {
         placeholder: 'Start writing, or paste long text…',
         onDone: () => this.commitEdit(),
@@ -2274,7 +2275,7 @@
       main.append(el('div', { class: 'yb-docscroll' }, ed.el));
       modal.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (e.target === modal) this.commitEdit(); });
       modal.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); this.commitEdit(); } });
-      title.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ed.focus(false); } });
+      title.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ed.focus('start'); } });
       this.root.append(modal);
       this.root.classList.add('yb-docopen');
       this._docModal = modal;
@@ -2283,7 +2284,7 @@
         get: () => { const text = ed.getMarkdown(); return { title: title.value.trim(), text, comments: [...comments.values()].filter((cm) => cm.text && text.includes(`{#${cm.id}}`)) }; },
         empty: (v) => !v.title && !v.text,
       };
-      if (it.title || it.text) ed.focus(); else title.focus();
+      if (it.title || it.text) ed.focus('start'); else { title.focus(); title.select(); }
     }
 
     // ---------- media ----------
