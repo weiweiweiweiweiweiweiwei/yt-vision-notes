@@ -87,7 +87,8 @@
   const snap = (v) => Math.round(v / 10) * 10;
   const DOC_ICON = '<svg viewBox="0 0 60 76" width="60" height="76"><path class="pg" d="M5 2h37l16 16v53a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3z"/><path class="fold" d="M42 2v13a3 3 0 0 0 3 3h13z"/><text class="gl" x="20" y="47" text-anchor="middle" font-family="Georgia, \'Times New Roman\', serif" font-weight="700" font-size="18">T</text><path class="gln" d="M30 35h13M30 41h13M30 47h13M15 55h28"/></svg>';
   const isNodeItem = (i) => !!i && ((i.type === 'board' && i.node) || (!!i.nmode && (i.type === 'note' || i.type === 'column')));
-  const FREE_H = new Set(['todo', 'note', 'comment', 'table', 'doc', 'column', 'link', 'file', 'audio', 'heading', 'color']);
+  const FIXED = new Set(['doc']); // cards with a fixed size: no resize handle, stored w / h ignored
+  const FREE_H = new Set(['todo', 'note', 'comment', 'table', 'column', 'link', 'file', 'audio', 'heading', 'color']);
 
   class BoardView {
     constructor(root, api, opts) {
@@ -520,7 +521,7 @@
         e.classList.remove('yb-incol');
         if (e.parentElement !== this.layer) this.layer.append(e);
         e.style.left = it.x + 'px'; e.style.top = it.y + 'px';
-        e.style.width = (it.w || YVN.CARD_W[it.type] || 240) + 'px';
+        e.style.width = ((FIXED.has(it.type) ? 0 : it.w) || YVN.CARD_W[it.type] || 240) + 'px';
         e.style.minHeight = FREE_H.has(it.type) && it.h ? it.h + 'px' : '';
       }
       // cards stacked inside columns, in column order
@@ -674,7 +675,7 @@
         c.append(el('div', { class: 'yb-nmlabel', title: 'Double-click to edit', style: it.ncolor ? 'color:' + it.ncolor : '' }, it.nlabel != null ? it.nlabel : this._nodeNum.get(it.id) || ''));
         this._ports(c, it);
       }
-      if (it.type !== 'board') c.append(el('div', { class: 'yb-rs' + (FREE_H.has(it.type) ? ' yb-rs2' : ''), title: 'Drag to resize' }));
+      if (it.type !== 'board' && !FIXED.has(it.type)) c.append(el('div', { class: 'yb-rs' + (FREE_H.has(it.type) ? ' yb-rs2' : ''), title: 'Drag to resize' }));
       return c;
     }
     /**

@@ -318,7 +318,7 @@
 .yb-docic .fold { fill: var(--yb-fg2); }
 .yb-docic .gl { fill: var(--yb-bg, #fff); }
 .yb-docic .gln { fill: none; stroke: var(--yb-bg, #fff); stroke-width: 2.6; stroke-linecap: round; }
-.yb-doctitle { margin-top: 10px; font-size: 15px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.yb-doctitle { margin-top: 10px; font-size: 15px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 8; overflow: hidden; } /* at most 8 lines, then … */
 .yb-docwc { margin-top: 3px; font-size: 12px; color: var(--yb-fg2); }
 .yb-item.yb-doc.yb-incol { flex-direction: row; align-items: center; gap: 16px; padding: 14px 18px; text-align: left; background: var(--yb-card); }
 .yb-incol .yb-docic svg { width: 46px; height: 58px; }

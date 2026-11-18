@@ -244,6 +244,7 @@
   // ---------- layout helpers (shared by the canvas UI and data-only callers) ----------
   /** Rough card size when the DOM is not available. */
   YVN.estimateSize = (it) => {
+    if (it.type === 'doc') return { w: YVN.CARD_W.doc, h: 150 }; // fixed size, can't be resized
     const w = it.w || YVN.CARD_W[it.type] || 240;
     let h;
     if (it.type === 'shot' || it.type === 'image') {
