@@ -80,17 +80,32 @@
       }
       if (/^\s*([-*+]|\d+[.)])\s+/.test(line)) {
         flush();
-        const ordered = /^\s*\d+[.)]\s+/.test(line);
         const items = [];
         while (i < lines.length && /^\s*([-*+]|\d+[.)])\s+/.test(lines[i])) {
-          let t = lines[i++].replace(/^\s*([-*+]|\d+[.)])\s+/, '');
+          const raw = lines[i++];
+          const ind = Math.floor(raw.match(/^\s*/)[0].replace(/\t/g, '  ').length / 2);
+          let t = raw.replace(/^\s*([-*+]|\d+[.)])\s+/, '');
           const task = /^\[([ xX])\]\s+/.exec(t);
-          if (task) {
-            t = t.slice(task[0].length);
-            items.push(`<li class="yvn-task"><input type="checkbox" data-task="${taskN++}"${task[1] === ' ' ? '' : ' checked'}> ${inline(t)}</li>`);
-          } else items.push(`<li>${inline(t)}</li>`);
+          let li;
+          if (task) { t = t.slice(task[0].length); li = `<li class="yvn-task"><input type="checkbox" data-task="${taskN++}"${task[1] === ' ' ? '' : ' checked'}> ${inline(t)}`; }
+          else li = `<li>${inline(t)}`;
+          items.push({ ind, ordered: /^\s*\d+[.)]\s+/.test(raw), li });
         }
-        out.push(ordered ? `<ol>${items.join('')}</ol>` : `<ul>${items.join('')}</ul>`);
+        // an item indented deeper than the one before it becomes a sub-list inside that item
+        const build = (k, level) => {
+          const tag = items[k].ordered ? 'ol' : 'ul';
+          let h = `<${tag}>`;
+          while (k < items.length && items[k].ind >= level) {
+            if (items[k].ind > level) {
+              const [sub, next] = build(k, items[k].ind);
+              h = h.endsWith('</li>') ? h.slice(0, -5) + sub + '</li>' : h + '<li>' + sub + '</li>';
+              k = next; continue;
+            }
+            h += items[k].li + '</li>'; k++;
+          }
+          return [h + `</${tag}>`, k];
+        };
+        for (let k = 0; k < items.length;) { const [h, next] = build(k, items[k].ind); out.push(h); k = next; }
         continue;
       }
       if (!line.trim()) { flush(); i++; continue; }

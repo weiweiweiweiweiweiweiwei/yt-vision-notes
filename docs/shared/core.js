@@ -164,7 +164,7 @@
   //   video = { id, title, channel }
   // =====================================================================================
   YVN.BOARD_COLORS = ['#e5484d', '#f76b15', '#f5a524', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#8b8d98'];
-  YVN.CARD_W = { node: 124, note: 260, shot: 240, image: 240, board: 120, link: 240, column: 300, color: 160, comment: 280, todo: 300, heading: 420, table: 380, sketch: 300, video: 360, map: 320, file: 260, audio: 300, doc: 240 };
+  YVN.CARD_W = { node: 124, note: 260, shot: 240, image: 240, board: 120, link: 240, column: 300, color: 160, comment: 280, todo: 300, heading: 420, table: 380, sketch: 300, video: 360, map: 320, file: 260, audio: 300, doc: 150 };
 
   YVN.emptyBoard = (id, title, parentId) => {
     const now = Date.now();
@@ -182,6 +182,12 @@
   });
 
   /** Markdown → readable plain text (for search results, trash, previews). */
+  /** Words for the document card: every CJK character counts as one word, plus Latin / number words. */
+  YVN.wordCount = (md) => {
+    const CJK = /[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]/g;
+    const t = YVN.plainText(md || '');
+    return (t.match(CJK) || []).length + (t.replace(CJK, ' ').match(/[A-Za-z0-9\u00C0-\u024F]+(?:['’-][A-Za-z0-9\u00C0-\u024F]+)*/g) || []).length;
+  };
   YVN.plainText = (md) => String(md || '')
     .replace(/\[([^\]]+)\]\{#c_[\w-]+\}/g, '$1')
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1')

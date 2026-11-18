@@ -85,6 +85,7 @@
   const host = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return url; } };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const snap = (v) => Math.round(v / 10) * 10;
+  const DOC_ICON = '<svg viewBox="0 0 60 76" width="60" height="76"><path class="pg" d="M5 2h37l16 16v53a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3z"/><path class="fold" d="M42 2v13a3 3 0 0 0 3 3h13z"/><text class="gl" x="20" y="47" text-anchor="middle" font-family="Georgia, \'Times New Roman\', serif" font-weight="700" font-size="18">T</text><path class="gln" d="M30 35h13M30 41h13M30 47h13M15 55h28"/></svg>';
   const isNodeItem = (i) => !!i && ((i.type === 'board' && i.node) || (!!i.nmode && (i.type === 'note' || i.type === 'column')));
   const FREE_H = new Set(['todo', 'note', 'comment', 'table', 'doc', 'column', 'link', 'file', 'audio', 'heading', 'color']);
 
@@ -643,10 +644,11 @@
         c.append(el('div', { class: 'yb-linkbody' }, el('span', { class: 'yb-linkic yb-fileic' }, icon('file', 20)),
           el('div', { class: 'yb-linktxt' }, el('b', {}, it.file ? it.file.name : 'File'), el('small', {}, it.file ? YVN.fmtSize(it.file.size) : ''))));
       } else if (it.type === 'doc') {
-        const plain = YVN.plainText(it.text || '').replace(/\s+/g, ' ').trim();
-        c.append(el('div', { class: 'yb-docic' }, icon('doc', 26)),
-          el('div', { class: 'yb-doctitle' + (it.title ? '' : ' yb-ph') }, it.title || 'Untitled document'),
-          plain && el('div', { class: 'yb-docprev' }, plain.slice(0, 120) + (plain.length > 120 ? '…' : '')));
+        // Milanote-style document: a page icon, the title and a word count; double-click opens the editor
+        const words = YVN.wordCount(it.text || '');
+        c.append(el('div', { class: 'yb-docic', 'aria-hidden': 'true', html: DOC_ICON }),
+          el('div', { class: 'yb-doctitle' }, it.title || 'New Document'),
+          el('div', { class: 'yb-docwc' }, words + (words === 1 ? ' word' : ' words')));
       } else if (it.type === 'comment') {
         const thread = el('div', { class: 'yb-thread' });
         for (const cm of it.comments || []) thread.append(this._commentLine(cm));
@@ -1484,7 +1486,7 @@
         return;
       }
       if (it.type === 'sketch') return this._sketchEdit(it, c);
-      if (it.type === 'doc') return this._docEdit(it, c);
+      if (it.type === 'doc') return this._docEdit(it);
       if (it.type === 'comment') {
         const mode = (opt && opt.mode) || 'reply';
         const cur = mode === 'edit' ? (it.comments || []).find((x) => x.id === opt.cid) : null;
@@ -1573,7 +1575,8 @@
           }
         }
         this._fresh = null;
-        if (this._docModal) { this.fmt.container = this.root; this.root.append(this.fmt.el); this._docModal.remove(); this._docModal = null; }
+        if (this._docTools) { this._docTools.destroy(); this._docTools = null; }
+        if (this._docModal) { this.fmt.container = this.root; this.root.append(this.fmt.el); this._docModal.remove(); this._docModal = null; this.root.classList.remove('yb-docopen'); }
         if (c) c._sig = null;
         return this.reload();
       }
@@ -2253,22 +2256,34 @@
     }
 
     // ---------- document (full-screen editor) ----------
-    _docEdit(it, c) {
-      const title = el('input', { class: 'yb-doctitle-in', placeholder: 'Document title' });
+    _docEdit(it) {
+      const comments = new Map((it.comments || []).map((cm) => [cm.id, { ...cm }]));
+      const title = el('input', { class: 'yb-doctitle-in', placeholder: 'New Document', 'aria-label': 'Document title' });
       title.value = it.title || '';
-      const ed = new YVN.RichEditor(it.text || '', { placeholder: 'Start writing…', onDone: () => this.commitEdit() });
+      const ed = new YVN.RichEditor(it.text || '', {
+        placeholder: 'Start writing, or paste long text…',
+        onDone: () => this.commitEdit(),
+        onComment: (cid, span, isNew) => this._commentPop({ itemId: it.id, cid, anchor: span, editing: true, isNew }),
+      });
       ed.el.classList.add('yb-docbody');
-      const close = el('button', { class: 'yb-btn yb-btn-primary', onclick: () => this.commitEdit() }, 'Done');
-      const modal = el('div', { class: 'yb-docmodal' }, el('div', { class: 'yb-docpage' }, el('div', { class: 'yb-docbar' }, el('span', { class: 'yb-ph' }, 'Document'), el('span', { class: 'yb-grow' }), close), title, ed.el));
+      const close = el('button', { class: 'yb-hbtn yb-docclose', title: 'Close (Esc)', 'aria-label': 'Close document', onclick: () => this.commitEdit() }, icon('close', 18));
+      const main = el('div', { class: 'yb-docmain' });
+      const page = el('div', { class: 'yb-docpage', role: 'dialog', 'aria-label': 'Document' }, el('div', { class: 'yb-dochead' }, el('span', { class: 'yb-docsp' }), title, close), main);
+      const modal = el('div', { class: 'yb-docmodal' }, page);
+      this._docTools = new YVN.DocToolbar(ed, main);
+      main.append(el('div', { class: 'yb-docscroll' }, ed.el));
       modal.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (e.target === modal) this.commitEdit(); });
       modal.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); this.commitEdit(); } });
+      title.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ed.focus(false); } });
       this.root.append(modal);
+      this.root.classList.add('yb-docopen');
       this._docModal = modal;
-      this.fmt.container = modal;
-      modal.append(this.fmt.el);
-      this.fmt.attach(ed);
-      this._edit = { it, field: 'patch', get: () => ({ title: title.value.trim(), text: ed.getMarkdown() }), empty: (v) => !v.title && !v.text };
-      if (it.title) ed.focus(); else title.focus();
+      this._edit = {
+        it, ed, comments, field: 'patch',
+        get: () => { const text = ed.getMarkdown(); return { title: title.value.trim(), text, comments: [...comments.values()].filter((cm) => cm.text && text.includes(`{#${cm.id}}`)) }; },
+        empty: (v) => !v.title && !v.text,
+      };
+      if (it.title || it.text) ed.focus(); else title.focus();
     }
 
     // ---------- media ----------

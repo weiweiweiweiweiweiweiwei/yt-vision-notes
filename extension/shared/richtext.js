@@ -35,7 +35,7 @@
       if (t === 'input') continue;
       if (BLOCK.test(t)) { const s = inlineMd(n); out += (out && !out.endsWith('\n') ? '\n' : '') + s + '\n'; continue; }
       const inner = inlineMd(n);
-      if (t === 'strong' || t === 'b') out += wrapM('**', inner);
+      if (t === 'strong' || t === 'b') out += /^(normal|[1-4]00)$/.test((n.style && n.style.fontWeight) || '') ? inner : wrapM('**', inner);
       else if (t === 'em' || t === 'i') out += wrapM('*', inner);
       else if (t === 'del' || t === 's' || t === 'strike') out += wrapM('~~', inner);
       else if (t === 'u') out += wrapM('++', inner);
@@ -53,6 +53,23 @@
       else out += styleWrap(n, inner);
     }
     return out;
+  }
+  function listLines(list, depth) {
+    const ord = list.tagName === 'OL', lines = [];
+    let k = 0;
+    const isList = (x) => x.tagName === 'UL' || x.tagName === 'OL';
+    for (const c of list.children) {
+      if (isList(c)) { lines.push(...listLines(c, depth + 1)); continue; }
+      if (c.tagName !== 'LI') continue;
+      k++;
+      const own = c.cloneNode(true);
+      for (const x of [...own.children]) if (isList(x)) x.remove();
+      const cb = [...c.childNodes].find((x) => x.tagName === 'INPUT' && x.type === 'checkbox');
+      const txt = inlineMd(own).replace(/\n+/g, ' ').trim();
+      if (txt || cb) lines.push('  '.repeat(depth) + (ord ? k + '. ' : '- ') + (cb ? `[${cb.checked ? 'x' : ' '}] ` : '') + txt);
+      for (const sub of [...c.children].filter(isList)) lines.push(...listLines(sub, depth + 1));
+    }
+    return lines;
   }
   function blockMd(root) {
     const out = [];
@@ -81,16 +98,7 @@
         const s = inlineMd(n).replace(/\n+/g, ' ').trim();
         if (s) out.push('#'.repeat(Math.max(1, +t[1] - 2)) + ' ' + (center ? '->' + s + '<-' : s));
       } else if (t === 'ul' || t === 'ol') {
-        const lines = [];
-        let k = 0;
-        for (const li of n.children) {
-          if (li.tagName !== 'LI') continue;
-          k++;
-          const cb = li.querySelector('input[type=checkbox]');
-          const s = inlineMd(li).replace(/\n+/g, ' ').trim();
-          if (!s && !cb) continue;
-          lines.push((t === 'ol' ? k + '. ' : '- ') + (cb ? `[${cb.checked ? 'x' : ' '}] ` : '') + s);
-        }
+        const lines = listLines(n, 0);
         if (lines.length) out.push(lines.join('\n'));
       } else if (t === 'blockquote') {
         const s = inlineMd(n).replace(/\n+$/, '');
@@ -141,8 +149,21 @@
       el.addEventListener('keydown', (e) => this._key(e));
       el.addEventListener('paste', (e) => {
         e.preventDefault(); e.stopPropagation();
-        const t = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
-        document.execCommand('insertText', false, t);
+        const cd = e.clipboardData;
+        const html = cd && cd.getData('text/html');
+        if (html) {
+          const md = blockMd(new DOMParser().parseFromString(html, 'text/html').body).trim();
+          if (md) {
+            let out = YVN.renderMarkdown(md);
+            const one = /^<p>([\s\S]*)<\/p>$/.exec(out);
+            if (one && !one[1].includes('<p')) out = one[1]; // a single line goes inline, not as a new paragraph
+            document.execCommand('insertHTML', false, out);
+            for (const cb of el.querySelectorAll('input[type=checkbox]')) cb.contentEditable = 'false';
+            this._empty();
+            return;
+          }
+        }
+        document.execCommand('insertText', false, (cd && cd.getData('text/plain')) || '');
       });
       el.addEventListener('focus', () => {
         try { document.execCommand('defaultParagraphSeparator', false, 'p'); document.execCommand('styleWithCSS', false, false); } catch (err) { /* old browsers */ }
@@ -226,6 +247,7 @@
         code: !!(r && closest(r.startContainer, 'code', this.el)),
         link: !!(r && closest(r.startContainer, 'a[href^="http"]', this.el)),
         comment: !!(r && closest(r.startContainer, 'span.yvn-cmt', this.el)),
+        list: !!(r && closest(r.startContainer, 'li', this.el)),
       };
     }
     cmd(name, arg) {
@@ -240,6 +262,26 @@
         case 'ul': document.execCommand('insertUnorderedList'); break;
         case 'ol': document.execCommand('insertOrderedList'); break;
         case 'center': document.execCommand(st.center ? 'justifyLeft' : 'justifyCenter'); break;
+        case 'indent': if (st.list) document.execCommand('indent'); break;
+        case 'outdent': if (st.list) document.execCommand('outdent'); break;
+        case 'p': document.execCommand('formatBlock', false, 'p'); break;
+        case 'h1': document.execCommand('formatBlock', false, 'h3'); break; // stored as #, ##, ### (see blockMd)
+        case 'h2': document.execCommand('formatBlock', false, 'h4'); break;
+        case 'h3': document.execCommand('formatBlock', false, 'h5'); break;
+        case 'quote': document.execCommand('formatBlock', false, 'blockquote'); break;
+        case 'pre': document.execCommand('formatBlock', false, 'pre'); break;
+        case 'hr': document.execCommand('insertHorizontalRule'); break;
+        case 'check': {
+          if (!st.list) document.execCommand('insertUnorderedList');
+          const li = closest(getSelection().anchorNode, 'li', this.el);
+          if (li && !li.querySelector('input[type=checkbox]')) {
+            li.classList.add('yvn-task');
+            const cb = document.createElement('input');
+            cb.type = 'checkbox'; cb.contentEditable = 'false';
+            li.prepend(cb, document.createTextNode(' '));
+          }
+          break;
+        }
         case 'code': {
           const c = closest(r.startContainer, 'code', this.el);
           if (c) { unwrap(c); break; }
@@ -387,4 +429,101 @@
     destroy() { document.removeEventListener('selectionchange', this._onSel); this.el.remove(); }
   }
   YVN.FormatBar = FormatBar;
+
+  // ---------- document editor: vertical tool column ----------
+  const DT = (inner) => '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+  const BH = Object.fromEntries(B.filter((b) => b[0] !== '|').map((b) => [b[0], b[1]]));
+  const DOC_TOOLS = [
+    ['style', DT('<path d="M4 5h11M9.5 5v13M7.5 18h4"/><circle cx="17.5" cy="16.5" r="1.6" stroke="#e5484d" stroke-width="3.2" stroke-dasharray="3.35 6.7"/><circle cx="17.5" cy="16.5" r="1.6" stroke="#30a46c" stroke-width="3.2" stroke-dasharray="3.35 6.7" stroke-dashoffset="-3.35"/><circle cx="17.5" cy="16.5" r="1.6" stroke="#f5a524" stroke-width="3.2" stroke-dasharray="3.35 6.7" stroke-dashoffset="-6.7"/>'), 'Text style', 'Text style'],
+    ['insert', DT('<path d="M4 6h12M4 11h10M4 16h7M18 13v7M14.5 16.5h7"/>'), 'Insert', 'Insert'],
+    ['bold', BH.bold, 'Bold (Ctrl+B)'], ['italic', BH.italic, 'Italic (Ctrl+I)'], ['strike', BH.strike, 'Strikethrough'], ['underline', BH.underline, 'Underline (Ctrl+U)'],
+    ['ul', BH.ul, 'Bulleted list'], ['ol', BH.ol, 'Numbered list'],
+    ['indent', DT('<path d="M11 7h9M11 12h9M11 17h9M4 9l3 3-3 3"/>'), 'Indent'], ['outdent', DT('<path d="M11 7h9M11 12h9M11 17h9M7 9l-3 3 3 3"/>'), 'Outdent'],
+    ['center', BH.center, 'Align center'], ['code', BH.code, 'Inline code'], ['link', BH.link, 'Link (Ctrl+K)'], ['comment', BH.comment, 'Add comment'],
+  ];
+  const DOC_MENUS = {
+    style: [['p', 'Normal text'], ['h1', 'Heading 1'], ['h2', 'Heading 2'], ['h3', 'Heading 3'], ['quote', 'Quote'], ['pre', 'Code block']],
+    insert: [['hr', 'Divider'], ['check', 'Checklist'], ['ul', 'Bulleted list'], ['ol', 'Numbered list']],
+  };
+  class DocToolbar {
+    constructor(ed, host) {
+      this.ed = ed; ed.bar = this; this.host = host;
+      const el = (this.el = document.createElement('div'));
+      el.className = 'yb-doctools';
+      for (const [cmd, ic, title, label] of DOC_TOOLS) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'yb-dt' + (label ? ' yb-dt-big' : ''); b.dataset.cmd = cmd;
+        b.title = title; b.setAttribute('aria-label', title);
+        YVN.setHTML(b, '<span class="yb-dt-ic">' + ic + '</span>' + (label ? '<span class="yb-dt-lb">' + label + '</span>' : ''));
+        el.append(b);
+      }
+      this.pop = document.createElement('div'); this.pop.className = 'yb-dtpop'; this.pop.hidden = true;
+      this.linkBox = document.createElement('div'); this.linkBox.className = 'yb-dtpop yb-dtlink'; this.linkBox.hidden = true;
+      this.linkInput = document.createElement('input'); this.linkInput.type = 'url'; this.linkInput.placeholder = 'Paste a link and press Enter';
+      this.unlink = document.createElement('button'); this.unlink.type = 'button'; this.unlink.textContent = 'Remove';
+      this.linkBox.append(this.linkInput, this.unlink);
+      host.append(el, this.pop, this.linkBox);
+      // keep the text selection while using the tools
+      for (const n of [el, this.pop]) n.addEventListener('mousedown', (e) => e.preventDefault());
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b || b.disabled) return;
+        const cmd = b.dataset.cmd;
+        if (DOC_MENUS[cmd]) return this._menu(cmd, b);
+        this.pop.hidden = true;
+        if (cmd === 'link') return this.linkMode();
+        this.ed.cmd(cmd);
+      });
+      this.pop.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; this.pop.hidden = true; this.ed.cmd(b.dataset.cmd); });
+      this.linkInput.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') { e.preventDefault(); this._applyLink(this.linkInput.value.trim()); }
+        if (e.key === 'Escape') { e.preventDefault(); this._applyLink(null); }
+      });
+      this.unlink.addEventListener('click', () => this._applyLink(''));
+      this._onSel = () => this.update();
+      document.addEventListener('selectionchange', this._onSel);
+      this.update();
+    }
+    _at(node, b) { node.style.top = b.offsetTop + 'px'; }
+    _menu(which, b) {
+      if (!this.pop.hidden && this.pop.dataset.which === which) { this.pop.hidden = true; return; }
+      this.pop.dataset.which = which;
+      YVN.setHTML(this.pop, DOC_MENUS[which].map(([c, l]) => '<button type="button" data-cmd="' + c + '" class="yb-dtpi yb-dtpi-' + c + '">' + l + '</button>').join(''));
+      this.linkBox.hidden = true; this.pop.hidden = false; this._at(this.pop, b);
+    }
+    linkMode() {
+      const r = this.ed.range();
+      if (!r) return;
+      const a = closest(r.startContainer, 'a[href^="http"]', this.ed.el);
+      if (r.collapsed && !a) return;
+      this._linkRange = r.cloneRange();
+      this.linkInput.value = a ? a.getAttribute('href') : '';
+      this.unlink.hidden = !a;
+      this.pop.hidden = true; this.linkBox.hidden = false;
+      this._at(this.linkBox, this.el.querySelector('[data-cmd="link"]'));
+      this.linkInput.focus(); this.linkInput.select();
+    }
+    _applyLink(url) {
+      const r = this._linkRange; this._linkRange = null; this.linkBox.hidden = true;
+      if (!r) return;
+      this.ed.el.focus();
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      if (url === null) return;
+      if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+      this.ed.cmd('link', url);
+    }
+    isBusy() { return !!this._linkRange; }
+    update() {
+      const r = this.ed.range();
+      const st = r ? this.ed.state() : {};
+      for (const b of this.el.querySelectorAll('button')) {
+        const c = b.dataset.cmd;
+        b.classList.toggle('on', !!st[c]);
+        b.disabled = (c === 'indent' || c === 'outdent') ? !st.list : (c === 'link' || c === 'comment') ? !r || (r.collapsed && !st[c]) : false;
+      }
+    }
+    destroy() { document.removeEventListener('selectionchange', this._onSel); this.el.remove(); this.pop.remove(); this.linkBox.remove(); if (this.ed.bar === this) this.ed.bar = null; }
+  }
+  YVN.DocToolbar = DocToolbar;
 })(typeof self !== 'undefined' ? self : globalThis);
