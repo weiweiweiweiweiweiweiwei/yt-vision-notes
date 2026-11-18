@@ -244,7 +244,7 @@
         center: cap ? 'shot' : 'tidy',
         panels: [
           ['link', 'heading', 'line', 'board', 'column', 'comment'],
-          ['table', 'sketch', this.o.aiGenerate ? 'ai' : cap ? 'upload_image' : 'upload', 'todo', 'draw', 'color'],
+          ['table', 'sketch', this.o.aiGenerate ? 'ai' : 'doc', 'todo', 'draw', 'color'],
         ],
       };
     }

@@ -346,7 +346,12 @@
 .yb-dtlink { display: flex; gap: 6px; align-items: center; }
 .yb-dtlink input { width: 240px; height: 30px; padding: 0 8px; border: 1px solid var(--yb-line); border-radius: 6px; background: var(--yb-raised); color: var(--yb-fg); outline: none; }
 .yb-dtlink button { height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--yb-raised); color: var(--yb-fg); cursor: pointer; }
-.yb-docscroll { flex: 1; min-width: 0; overflow-y: auto; padding: 22px 56px 80px 12px; }
+.yb-docscroll { flex: 1; min-width: 0; overflow-y: auto; padding: 22px 56px 80px 12px; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .18) transparent; }
+.yb-docscroll::-webkit-scrollbar { width: 10px; }
+.yb-docscroll::-webkit-scrollbar-track { background: transparent; }
+.yb-docscroll::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 6px; background: rgba(255, 255, 255, .18) padding-box; }
+.yb-docscroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .3) padding-box; }
+.yb-docbody:focus, .yb-docbody:focus-visible { outline: none; }
 .yb-docopen .yb-cpop { z-index: 60; }
 .yb-docbody { min-height: 100%; font-size: 15px; line-height: 1.75; }
 .yb-docbody h3 { font-size: 24px; margin: 18px 0 8px; } .yb-docbody h4 { font-size: 19px; margin: 14px 0 6px; } .yb-docbody h5 { font-size: 16px; margin: 12px 0 4px; }

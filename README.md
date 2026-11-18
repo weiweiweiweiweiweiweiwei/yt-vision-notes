@@ -26,7 +26,7 @@ YouTube 沉浸式截圖筆記：**Chrome 擴充功能**（在 YouTube 旁邊直�
 - **可拖曳的分隔線**：播放器和筆記之間拖曳調整比例；雙擊分隔線在 1/3、1/2、2/3 之間切換；比例會記住。
 - **彈出成獨立視窗**：面板右上角 ⧉，筆記變成獨立視窗，可拖到第二台螢幕。視窗裡按「截圖」一樣擷取 YouTube 分頁的畫面、點時間戳一樣讓 YouTube 跳轉；按「收回」回到右側。
 
-- **右鍵工具輪盤（YouTube 面板、彈出視窗與網站）**：三處都不再有工具列，改用輪盤；網站沒有影片可截圖，中間改成 Tidy nodes（Image 移到「⋯」），第二面的 AI notes 位置改成 Upload。在白板空白處按右鍵，滑鼠位置會出現蜂巢狀輪盤，中間的圖釘＝截圖。再按一次右鍵切換到第二面，再按一次回到第一面（切換時整圈扭轉收合再綻開）。第一面：Link、Heading、Line、Board、Column、Comment；第二面：Table、Sketch、AI notes、To-do、Draw、Color。點選工具或點畫面其他地方就關閉，卡片建立在按右鍵的位置。在卡片上按右鍵仍是卡片選單。其餘工具（Summary、Image、Upload、Video、Map、Audio、Document…）與復原／重做、垃圾桶在面板右上角的「⋯」。
+- **右鍵工具輪盤（YouTube 面板、彈出視窗與網站）**：三處都不再有工具列，改用輪盤；網站沒有影片可截圖，中間改成 Tidy nodes（Image 移到「⋯」），第二面的 AI notes 位置改成 Document（Upload 移到「⋯」）。在白板空白處按右鍵，滑鼠位置會出現蜂巢狀輪盤，中間的圖釘＝截圖。再按一次右鍵切換到第二面，再按一次回到第一面（切換時整圈扭轉收合再綻開）。第一面：Link、Heading、Line、Board、Column、Comment；第二面：Table、Sketch、AI notes、To-do、Draw、Color。點選工具或點畫面其他地方就關閉，卡片建立在按右鍵的位置。在卡片上按右鍵仍是卡片選單。其餘工具（Summary、Image、Upload、Video、Map、Audio、Document…）與復原／重做、垃圾桶在面板右上角的「⋯」。
 
 **AI 筆記（Gemini）**
 - YouTube 面板或彈出視窗按「AI notes」：選擇「Summary + key moments」「Step-by-step tutorial」或只用你的指示、筆記語言、最多幾張截圖，也可以寫補充指示（例如「專注在節點設定和數值」）。
