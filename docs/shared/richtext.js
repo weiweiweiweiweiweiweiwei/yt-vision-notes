@@ -74,9 +74,11 @@
   function blockMd(root) {
     const out = [];
     let buf = null;
-    const pushPara = (s, center) => {
-      s = s.replace(/^\n+|\n+$/g, '');
-      if (!s.trim()) return;
+    // An empty paragraph made on purpose (Enter twice) is kept as a line holding only a zero-width
+    // space, so the extra gap between paragraphs survives saving and reopening.
+    const pushPara = (s, center, keepEmpty) => {
+      s = s.replace(/​/g, '').replace(/^\n+|\n+$/g, '');
+      if (!s.trim()) { if (keepEmpty) out.push('​'); return; }
       out.push(center ? '->' + s + '<-' : s);
     };
     const flushBuf = () => { if (buf) { pushPara(inlineMd(buf)); buf = null; } };
@@ -90,10 +92,10 @@
       flushBuf();
       const center = n.style && n.style.textAlign === 'center';
       // Chrome nests a list made inside a paragraph as <p><ul>…</ul></p>: treat such a <p> like a <div> so the list survives
-      if (t === 'p' && ![...n.children].some((c) => BLOCK.test(c.tagName))) pushPara(inlineMd(n), center);
+      if (t === 'p' && ![...n.children].some((c) => BLOCK.test(c.tagName))) pushPara(inlineMd(n), center, true);
       else if (t === 'p' || t === 'div') {
         if ([...n.children].some((c) => BLOCK.test(c.tagName))) { const inner = blockMd(n); if (inner) out.push(inner); }
-        else pushPara(inlineMd(n), center);
+        else pushPara(inlineMd(n), center, true);
       } else if (/^h[1-6]$/.test(t)) {
         const s = inlineMd(n).replace(/\n+/g, ' ').trim();
         if (s) out.push('#'.repeat(Math.max(1, +t[1] - 2)) + ' ' + (center ? '->' + s + '<-' : s));
@@ -108,6 +110,8 @@
       else if (t === 'li') pushPara(inlineMd(n));
     }
     flushBuf();
+    while (out[0] === '​') out.shift();
+    while (out[out.length - 1] === '​') out.pop();
     return out.join('\n\n');
   }
   YVN.htmlToMarkdown = blockMd;
